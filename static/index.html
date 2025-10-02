@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Asisten Belajar Interaktif</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+  <div class="container">
+    <h1>Asisten Belajar Interaktif</h1>
+
+    <form id="user-form">
+      <label>Profesi:</label>
+      <input type="text" name="profesi" required>
+
+      <label>Usia:</label>
+      <input type="number" name="umur" required>
+
+      <label>Tipe Kognitif (utama):</label>
+      <select name="tipe_kognitif" required>
+        <option value="visual">Visual</option>
+        <option value="auditori">Auditori</option>
+        <option value="kinestetik">Kinestetik</option>
+      </select>
+
+      <label>Pertanyaan:</label>
+      <input type="text" name="pertanyaan" required>
+
+      <button type="submit">Mulai Bertanya</button>
+    </form>
+
+    <div id="result"></div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

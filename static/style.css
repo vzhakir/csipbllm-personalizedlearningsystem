@@ -1,0 +1,80 @@
+body {
+  font-family: Arial, sans-serif;
+  background-color: #f7f7f7;
+  padding: 2rem;
+}
+
+.container {
+  max-width: 900px;
+  margin: auto;
+  background: #fff;
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+h1 {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+input, select, button {
+  padding: 0.6rem;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  font-size: 1rem;
+}
+
+button {
+  background-color: #007bff;
+  color: white;
+  cursor: pointer;
+  border: none;
+}
+
+button:hover {
+  background-color: #0056b3;
+}
+
+.stage {
+  margin-top: 2rem;
+  padding: 1rem;
+  border-left: 4px solid #007bff;
+  background-color: #f0f8ff;
+}
+
+.stage h3 {
+  margin-top: 0;
+}
+
+.stage input {
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+.stage button {
+  margin-top: 0.5rem;
+}
+
+/* Compare mode */
+.compare-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+@media (min-width: 900px) {
+  .compare-grid { grid-template-columns: 1fr 1fr; }
+}
+.compare-col .stage { margin-top: 1rem; }
+.compare-header {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  opacity: 0.8;
+}
