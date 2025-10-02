@@ -22,13 +22,16 @@ Sistem ini menyesuaikan jawaban dengan **gaya belajar** (Visual, Auditori, Kines
 ---
 
 ## 📂 Project Structure
+```markdown
 📁 csipbllm-personalizedlearningsystem
 ├── ollamaapi.py # Backend FastAPI
 ├── static/
 │    ├── index.html # UI
 │    ├── script.js # Frontend logic
 │    └── style.css # Styling
+├── requirements.txt
 └── README.md
+```
 
 ## 1. **Clone repository**
 ```bash
