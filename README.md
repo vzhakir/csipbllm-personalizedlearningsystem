@@ -25,9 +25,9 @@ Sistem ini menyesuaikan jawaban dengan **gaya belajar** (Visual, Auditori, Kines
 📁 csipbllm-personalizedlearningsystem
 ├── ollamaapi.py # Backend FastAPI
 ├── static/
-│ ├── index.html # UI
-│ ├── script.js # Frontend logic
-│ └── style.css # Styling
+│    ├── index.html # UI
+│    ├── script.js # Frontend logic
+│    └── style.css # Styling
 └── README.md
 
 ## 1. **Clone repository**
