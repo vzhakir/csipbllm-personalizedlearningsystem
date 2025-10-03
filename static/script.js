@@ -1,10 +1,11 @@
 const form = document.getElementById("user-form");
 const resultDiv = document.getElementById("result");
-let currentStage = 1;
 let sessionId = null; // simpan session id global
 
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
+
+  // reset tampilan
   resultDiv.innerHTML = "";
 
   const formData = new FormData(form);
@@ -15,9 +16,7 @@ form.addEventListener("submit", async (e) => {
     pertanyaan: formData.get("pertanyaan"),
   };
 
-  currentStage = 1;
-
-  // Tombol download histori
+  // === Tombol download histori ===
   const btnGroup = document.createElement("div");
   btnGroup.style.marginBottom = "1rem";
 
@@ -48,19 +47,22 @@ form.addEventListener("submit", async (e) => {
   btnGroup.appendChild(jsonBtn);
   resultDiv.appendChild(btnGroup);
 
-  // Pilih 2 tipe random
+  // === Pilih 2 tipe random untuk pembanding ===
   const allTypes = ["visual", "auditori", "kinestetik"];
   const shuffled = allTypes.sort(() => Math.random() - 0.5);
   const [leftType, rightType] = shuffled.slice(0, 2);
 
+  // === Grid compare ===
   const grid = document.createElement("div");
   grid.className = "compare-grid";
   resultDiv.appendChild(grid);
 
   const left = document.createElement("div");
   left.className = "compare-col";
+
   const right = document.createElement("div");
   right.className = "compare-col";
+
   grid.appendChild(left);
   grid.appendChild(right);
 
@@ -74,93 +76,126 @@ form.addEventListener("submit", async (e) => {
   hR.textContent = `Tipe kognitif: ${rightType}`;
   right.appendChild(hR);
 
-  await Promise.all([
-    handleStage(baseData, 1, left, leftType),
-    handleStage(baseData, 1, right, rightType),
-  ]);
+  // === Panggil bot untuk jawaban utama dan perbandingan ===
+  await handleCompareAnswer(baseData, left, right, leftType, rightType);
 });
 
-async function handleStage(
-  userData,
-  stage,
-  mountEl = resultDiv,
-  overrideType = null
-) {
-  const stageTitleMap = { 1: "Hint Umum", 2: "Hint Visual", 3: "Jawaban Lengkap" };
-  const stageTitle = stageTitleMap[stage] || `Penjelasan Lanjutan`;
+// === Fungsi handle jawaban bot ===
+async function handleCompareAnswer(userData, leftEl, rightEl, leftType, rightType) {
+  const stageDivL = document.createElement("div");
+  const stageDivR = document.createElement("div");
 
-  const stageDiv = document.createElement("div");
-  stageDiv.className = "stage";
-  stageDiv.innerHTML = `<h3>Tahap ${stage} — ${stageTitle}</h3><p>⏳ Memuat hint...</p>`;
-  mountEl.appendChild(stageDiv);
+  stageDivL.className = "stage";
+  stageDivR.className = "stage";
 
-  const payloadUser = {
-    ...userData,
-    tipe_kognitif: overrideType || userData.tipe_kognitif,
-  };
+  stageDivL.innerHTML = `<p>⏳ Memuat jawaban...</p>`;
+  stageDivR.innerHTML = `<p>⏳ Memuat jawaban...</p>`;
 
+  leftEl.appendChild(stageDivL);
+  rightEl.appendChild(stageDivR);
+
+  // === Request ke backend ===
   const formData = new FormData();
-  formData.append("profesi", payloadUser.profesi);
-  formData.append("umur", payloadUser.umur);
-  formData.append("tipe_kognitif", payloadUser.tipe_kognitif);
-  formData.append("pertanyaan", payloadUser.pertanyaan);
-  formData.append("stage", stage);
-  if (sessionId) formData.append("session_id", sessionId);
+  formData.append("profesi", userData.profesi);
+  formData.append("umur", userData.umur);
+  formData.append("tipe_kognitif", userData.tipe_kognitif);
+  formData.append("pertanyaan", userData.pertanyaan);
 
-  const response = await fetch("/ask_stage", { method: "POST", body: formData });
+  if (sessionId) {
+    formData.append("session_id", sessionId);
+  }
+
+  const response = await fetch("/ask", {
+    method: "POST",
+    body: formData
+  });
+
   const data = await response.json();
 
-  // simpan session id
-  if (!sessionId) sessionId = data.session_id;
+  if (!sessionId) {
+    sessionId = data.session_id;
+  }
 
-  stageDiv.innerHTML = `<h3>${data.tahap}</h3><p>${data.answer}</p>`;
+  // === Render jawaban bot di 2 kolom ===
+  stageDivL.innerHTML = `
+    <div class="bot-answer">
+      ${marked.parse(data.answer)}
+    </div>
+  `;
 
+  stageDivR.innerHTML = `
+    <div class="bot-answer">
+      ${marked.parse(data.answer)}
+    </div>
+  `;
+
+  // === Form untuk jawaban user ===
   const jawabanForm = document.createElement("form");
+  jawabanForm.className = "jawaban-form";
+
   jawabanForm.innerHTML = `
-    <label>Jawaban Anda:</label><br>
-    <input type="text" name="jawaban_user" required>
+    <label for="jawaban_user">Jawaban Anda:</label><br>
+    <textarea 
+      name="jawaban_user" 
+      rows="4" 
+      placeholder="Tulis jawabanmu di sini... (bisa markdown atau kode)" 
+      required></textarea>
+    <br>
     <button type="submit">Kirim Jawaban</button>
   `;
-  stageDiv.appendChild(jawabanForm);
 
-  jawabanForm.addEventListener(
-    "submit",
-    async (e) => {
-      e.preventDefault();
-      const jawaban_user = jawabanForm.jawaban_user.value;
+  // render hanya sekali di bawah grid
+  resultDiv.appendChild(jawabanForm);
 
-      const checkFormData = new FormData();
-      checkFormData.append("profesi", payloadUser.profesi);
-      checkFormData.append("umur", payloadUser.umur);
-      checkFormData.append("tipe_kognitif", payloadUser.tipe_kognitif);
-      checkFormData.append("pertanyaan", payloadUser.pertanyaan);
-      checkFormData.append("jawaban_user", jawaban_user);
-      if (sessionId) checkFormData.append("session_id", sessionId);
+  jawabanForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
 
-      const res = await fetch("/check_answer", {
-        method: "POST",
-        body: checkFormData,
-      });
+    const jawaban_user = jawabanForm.jawaban_user.value;
 
-      const hasil = await res.json();
-      if (!sessionId) sessionId = hasil.session_id;
+    const checkFormData = new FormData();
+    checkFormData.append("profesi", userData.profesi);
+    checkFormData.append("umur", userData.umur);
+    checkFormData.append("tipe_kognitif", userData.tipe_kognitif);
+    checkFormData.append("pertanyaan", userData.pertanyaan);
+    checkFormData.append("jawaban_user", jawaban_user);
 
-      const hasilDiv = document.createElement("div");
-      hasilDiv.innerHTML = `
-        <p><strong>Jawaban:</strong> ${hasil.correct ? "Benar" : "Salah"}</p>
-        <p>${hasil.feedback}</p>
-      `;
-      stageDiv.appendChild(hasilDiv);
+    if (sessionId) {
+      checkFormData.append("session_id", sessionId);
+    }
 
-      if (hasil.correct) {
-        const end = document.createElement("p");
-        end.innerHTML = "✅ Jawabanmu sudah tepat. Proses dihentikan di tahap ini.";
-        stageDiv.appendChild(end);
-      } else {
-        currentStage++;
-        await handleStage(payloadUser, currentStage, mountEl, overrideType);
-      }
-    },
-    { once: true }
-  );
+    const res = await fetch("/check_answer", {
+      method: "POST",
+      body: checkFormData
+    });
+
+    const hasil = await res.json();
+
+    if (!sessionId) {
+      sessionId = hasil.session_id;
+    }
+
+    const hasilDiv = document.createElement("div");
+    hasilDiv.className = "jawaban-feedback";
+
+    hasilDiv.innerHTML = `
+      <h4>Jawaban Anda:</h4>
+      <div class="user-answer">
+        ${marked.parse(jawaban_user)}
+      </div>
+      <h4>Evaluasi:</h4>
+      <div class="bot-feedback">
+        ${marked.parse(hasil.feedback)}
+      </div>
+      <p><strong>Status:</strong> ${hasil.correct ? "✅ Benar" : "❌ Salah"}</p>
+    `;
+
+    resultDiv.appendChild(hasilDiv);
+
+    if (hasil.correct) {
+      const end = document.createElement("p");
+      end.innerHTML = "✅ Jawabanmu sudah tepat. Proses dihentikan di sini.";
+
+      resultDiv.appendChild(end);
+    }
+  }, { once: true });
 }

@@ -1,7 +1,6 @@
 from fastapi import FastAPI, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import PlainTextResponse, JSONResponse
 import requests, json, uuid
 
 app = FastAPI()
@@ -15,14 +14,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Konfigurasi model Ollama
+# Konfigurasi Ollama
 OLLAMA_API_URL = "http://localhost:11434/api/generate"
 MODEL_NAME = "gpt-oss"
 
-# Simpan histori percakapan
-sessions = {}  # {session_id: [{"role": "user"/"assistant", "content": "..."}]}
+# Simpan histori percakapan (per session_id)
+sessions = {}
 
-
+# === Fungsi pemanggil Ollama ===
 def call_ollama(prompt: str):
     try:
         payload = {"model": MODEL_NAME, "prompt": prompt, "stream": False}
@@ -31,67 +30,50 @@ def call_ollama(prompt: str):
         data = response.json()
         return data.get("response", "Tidak ada respons dari model.")
     except Exception as e:
-        return f"❌ Terjadi kesalahan saat memanggil model: {str(e)}"
+        return f"❌ Error: {str(e)}"
 
-
-# Endpoint generik untuk tahap berapapun
-@app.post("/ask_stage")
-async def ask_stage(
+# === Endpoint Tanya ===
+@app.post("/ask")
+async def ask(
     profesi: str = Form(...),
     umur: int = Form(...),
     tipe_kognitif: str = Form(...),
     pertanyaan: str = Form(...),
-    stage: int = Form(...),
-    session_id: str = Form(None),
+    session_id: str = Form(None)
 ):
-    # buat session id baru kalau belum ada
     if not session_id:
         session_id = str(uuid.uuid4())
         sessions[session_id] = []
 
-    if session_id not in sessions:
-        sessions[session_id] = []
-
-    # simpan pertanyaan user
-    sessions[session_id].append({"role": "user", "content": pertanyaan})
-
-    if stage == 1:
-        instruksi = "Tahap 1 — Hint Umum. Berikan petunjuk ringan agar pengguna berpikir sendiri, jangan langsung memberi jawaban."
-    elif stage == 2:
-        instruksi = "Tahap 2 — Hint Visual. Gunakan analogi atau deskripsi visual yang membantu, jangan langsung memberi jawaban."
-    elif stage == 3:
-        instruksi = "Tahap 3 — Jawaban Lengkap. Jawaban harus benar, lengkap, mudah dimengerti."
-    else:
-        instruksi = f"Tahap {stage} — Penjelasan Lanjutan. Tambahkan detail tambahan, contoh, atau perspektif lain agar semakin jelas."
-
-    # gabungkan histori
-    history_text = "\n".join(
-        [f"{msg['role'].capitalize()}: {msg['content']}" for msg in sessions[session_id]]
-    )
-
     prompt = f"""
-Kamu adalah asisten pembelajaran.
-Profil pengguna:
+Kamu adalah **asisten pembelajaran interaktif** yang menjelaskan materi sesuai tipe kognitif pengguna.
+
+### Informasi Pengguna:
 - Profesi: {profesi}
-- Umur: {umur}
-- Tipe kognitif belajar: {tipe_kognitif}
+- Usia: {umur} tahun
+- Tipe Belajar Utama: {tipe_kognitif}
 
-Riwayat percakapan:
-{history_text}
+### Pertanyaan Pengguna:
+"{pertanyaan}"
 
-Instruksi:
-{instruksi}
+### Instruksi:
+1. Jawablah dengan bahasa sederhana, jelas, dan mudah dipahami.
+2. Sesuaikan gaya penjelasan dengan tipe kognitif:
+   - **Visual** → gunakan deskripsi gambar, diagram, atau peta konsep.
+   - **Auditori** → gunakan gaya bercerita, analogi suara, atau percakapan.
+   - **Kinestetik** → gunakan contoh praktik, gerakan, atau eksperimen langsung.
+3. Sertakan poin penting dalam bullet agar lebih terstruktur.
+4. Jangan menjawab terlalu panjang, cukup ringkas tapi bermakna.
 """
 
     answer = call_ollama(prompt)
 
-    # simpan jawaban asisten
-    sessions[session_id].append({"role": "assistant", "content": answer})
+    # Simpan histori
+    sessions[session_id].append({"pertanyaan": pertanyaan, "jawaban": answer})
 
-    return {"tahap": f"Tahap {stage}", "answer": answer, "session_id": session_id}
+    return {"session_id": session_id, "answer": answer}
 
-
-# Evaluasi jawaban
+# === Endpoint Validasi Jawaban ===
 @app.post("/check_answer")
 async def check_answer(
     profesi: str = Form(...),
@@ -99,70 +81,78 @@ async def check_answer(
     tipe_kognitif: str = Form(...),
     pertanyaan: str = Form(...),
     jawaban_user: str = Form(...),
-    session_id: str = Form(None),
+    session_id: str = Form(None)
 ):
     if not session_id:
         session_id = str(uuid.uuid4())
         sessions[session_id] = []
 
-    if session_id not in sessions:
-        sessions[session_id] = []
-
-    sessions[session_id].append({"role": "user", "content": jawaban_user})
-
     prompt = f"""
-Kamu adalah evaluator jawaban.
+Kamu adalah **evaluator pembelajaran**.
 
-Pertanyaan: "{pertanyaan}"
-Jawaban pengguna: "{jawaban_user}"
+### Pertanyaan:
+"{pertanyaan}"
 
-Tugas:
-1. Analisis apakah makna jawaban sudah tepat.
-2. Abaikan phrasing atau susunan kata yang berbeda.
-3. Fokus ke substansi dan pemahaman.
-4. Jawab dalam format JSON valid saja. Tanpa penjelasan lain.
+### Jawaban Pengguna:
+"{jawaban_user}"
 
-Format:
+### Instruksi:
+1. Tentukan apakah jawaban pengguna **BENAR** atau **SALAH** berdasarkan substansi (abaikan beda phrasing).
+2. Jika **BENAR**:
+   - Beri apresiasi singkat.
+   - Nyatakan bahwa pengguna sudah memahami konsep.
+3. Jika **SALAH**:
+   - Berikan koreksi singkat.
+   - Tambahkan **hint atau pertanyaan lanjutan** agar pengguna bisa mencoba lagi.
+4. Output harus dalam format JSON valid berikut:
+
 {{
   "correct": true/false,
-  "feedback": "penjelasan singkat"
+  "feedback": "penjelasan singkat",
+  "next_question": "pertanyaan lanjutan atau hint jika salah, kosong jika benar"
 }}
 """
+
     result = call_ollama(prompt).strip()
+
     try:
         data = json.loads(result)
     except:
-        data = {"correct": False, "feedback": f"⚠️ Format tidak valid. Respons: {result}"}
+        data = {
+            "correct": False,
+            "feedback": f"⚠️ Format tidak valid. Respons: {result}",
+            "next_question": ""
+        }
 
-    sessions[session_id].append(
-        {"role": "assistant", "content": f"Evaluasi: {json.dumps(data)}"}
-    )
+    # Simpan histori evaluasi
+    sessions[session_id].append({
+        "pertanyaan": pertanyaan,
+        "jawaban_user": jawaban_user,
+        "evaluasi": data
+    })
 
-    return {**data, "session_id": session_id}
+    return {"session_id": session_id, **data}
 
-
-# Endpoint download history
+# === Endpoint Download Histori ===
 @app.get("/download_history")
 async def download_history(session_id: str, format: str = "txt"):
-    if session_id not in sessions or not sessions[session_id]:
-        return PlainTextResponse("❌ Tidak ada histori untuk session ini.", media_type="text/plain")
+    if session_id not in sessions:
+        return {"error": "Session not found"}
+    history = sessions[session_id]
 
     if format == "json":
-        return JSONResponse(
-            content=sessions[session_id],
-            headers={"Content-Disposition": f"attachment; filename=history_{session_id}.json"}
-        )
+        return history
 
-    # default: txt
-    history_text = "\n".join(
-        [f"{msg['role'].capitalize()}: {msg['content']}" for msg in sessions[session_id]]
-    )
-    return PlainTextResponse(
-        history_text,
-        media_type="text/plain",
-        headers={"Content-Disposition": f"attachment; filename=history_{session_id}.txt"}
-    )
+    txt = ""
+    for h in history:
+        txt += f"Q: {h.get('pertanyaan')}\n"
+        if "jawaban" in h:
+            txt += f"A: {h['jawaban']}\n"
+        if "jawaban_user" in h:
+            txt += f"User: {h['jawaban_user']}\n"
+            txt += f"Evaluasi: {h['evaluasi']}\n"
+        txt += "\n"
+    return txt
 
-
-# Mount folder static
+# === Serve frontend ===
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
