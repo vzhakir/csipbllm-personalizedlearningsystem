@@ -15,7 +15,7 @@ app.add_middleware(
 )
 
 # Konfigurasi Ollama
-OLLAMA_API_URL = "http://localhost:11434/api/generate"
+OLLAMA_API_URL = "http://localhost:11435/api/generate"
 MODEL_NAME = "deepseek-r1:8b"
 
 # Simpan histori percakapan (per session_id)
@@ -28,7 +28,27 @@ def call_ollama(prompt: str):
         response = requests.post(OLLAMA_API_URL, json=payload)
         response.raise_for_status()
         data = response.json()
-        return data.get("response", "Tidak ada respons dari model.")
+        raw_output = data.get("response", "Tidak ada respons dari model.")
+
+        # --- Filter "thinking" otomatis ---
+        clean_output = raw_output
+        lower = raw_output.lower()
+        if "let's think" in lower or "thinking:" in lower or "<think>" in lower:
+            # hilangkan bagian reasoning
+            parts = raw_output.split("\n")
+            filtered = []
+            skip = False
+            for line in parts:
+                if any(keyword in line.lower() for keyword in ["think", "reason", "analysis", "<think>"]):
+                    skip = True
+                elif skip and line.strip() == "":
+                    continue
+                else:
+                    filtered.append(line)
+            clean_output = "\n".join(filtered).strip()
+
+        return clean_output or raw_output
+
     except Exception as e:
         return f"❌ Error: {str(e)}"
 
@@ -46,23 +66,27 @@ async def ask(
         sessions[session_id] = []
 
     prompt = f"""
-Kamu adalah asisten belajar yang sabar dan adaptif.
-Gunakan gaya penjelasan sesuai tipe kognitif pengguna.
+    Kamu adalah asisten belajar yang sabar dan komunikatif.
+    Tugasmu membantu pengguna memahami konsep sesuai tipe belajar utamanya.
 
-Informasi pengguna:
-- Profesi: {profesi}
-- Umur: {umur}
-- Tipe belajar: {tipe_kognitif}
+    Data pengguna:
+    Profesi: {profesi}
+    Umur: {umur}
+    Tipe belajar: {tipe_kognitif}
 
-Pertanyaan dari pengguna:
-"{pertanyaan}"
+    Pertanyaan:
+    {pertanyaan}
 
-Buat dua bagian:
-1. Penjelasan utama berdasarkan tipe kognitif {tipe_kognitif}.
-2. Bandingkan secara singkat dengan satu tipe kognitif lain yang relevan (pilih acak antara auditori/visual/kinestetik).
+    Berikan dua bagian dalam jawaban:
+    1. Penjelasan utama yang sesuai dengan tipe belajar {tipe_kognitif}.
+    2. Perbandingan singkat dengan salah satu tipe belajar lain yang berbeda (visual, auditori, atau kinestetik, pilih secara acak).
 
-Jawablah dalam gaya alami, pendek, dan jelas.
-"""
+    Gunakan bahasa sederhana dan langsung pada inti pembahasan.
+    Jelaskan dengan cara alami, seperti menjelaskan ke teman.
+    Tidak perlu menggunakan bullet, penomoran, emoji, atau gaya penulisan khusus.
+    Akhiri jawaban dengan satu pertanyaan singkat agar pengguna bisa mencoba berpikir atau menjawab.
+    """
+
 
     answer = call_ollama(prompt)
 
@@ -86,30 +110,22 @@ async def check_answer(
         sessions[session_id] = []
 
     prompt = f"""
-Kamu adalah **evaluator pembelajaran**.
+    Kamu adalah evaluator pembelajaran yang ramah dan jelas.
 
-### Pertanyaan:
-"{pertanyaan}"
+    Pertanyaan:
+    {pertanyaan}
 
-### Jawaban Pengguna:
-"{jawaban_user}"
+    Jawaban pengguna:
+    {jawaban_user}
 
-### Instruksi:
-1. Tentukan apakah jawaban pengguna **BENAR** atau **SALAH** berdasarkan substansi (abaikan beda phrasing).
-2. Jika **BENAR**:
-   - Beri apresiasi singkat.
-   - Nyatakan bahwa pengguna sudah memahami konsep.
-3. Jika **SALAH**:
-   - Berikan koreksi singkat.
-   - Tambahkan **hint atau pertanyaan lanjutan** agar pengguna bisa mencoba lagi.
-4. Output harus dalam format JSON valid berikut:
+    Tugasmu:
+    1. Tentukan apakah jawaban pengguna benar atau salah berdasarkan makna.
+    2. Jika benar, beri pujian singkat dan jelaskan alasan singkat mengapa benar.
+    3. Jika salah, jelaskan secara singkat bagian yang kurang tepat dan berikan pertanyaan lanjutan agar pengguna bisa berpikir lagi.
+    4. Jawab hanya dalam format JSON valid seperti ini:
 
-{{
-  "correct": true/false,
-  "feedback": "penjelasan singkat",
-  "next_question": "pertanyaan lanjutan atau hint jika salah, kosong jika benar"
-}}
-"""
+    {{"correct": true/false, "feedback": "penjelasan singkat", "next_question": "pertanyaan lanjutan atau kosong jika benar"}}
+    """
 
     result = call_ollama(prompt).strip()
 

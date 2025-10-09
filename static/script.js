@@ -61,7 +61,7 @@ form.addEventListener("submit", async (e) => {
 
   const hR = document.createElement("div");
   hR.className = "compare-header";
-  hR.textContent = `Menurut ${compareType}:`;
+  hR.textContent = `Kalau dibandingkan dengan ${compareType}:`;
   right.appendChild(hR);
 
   // ==============================================================
