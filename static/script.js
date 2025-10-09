@@ -1,249 +1,242 @@
-// ================================================================
-// Asisten Belajar Interaktif - Script Utama (Verbose Version)
-// ================================================================
+/* =====================================================================
+   CSIPBLLM — Personalized Learning Frontend Script (FULL VERBOSE)
+   ---------------------------------------------------------------------
+   Fitur:
+   - Kirim pertanyaan ke backend (ollamaapi.py)
+   - Mendapatkan jawaban dengan gaya belajar
+   - Render hasil chat dalam format Markdown (via marked.js)
+   - Evaluasi jawaban siswa
+   - Unduh riwayat percakapan (txt/json)
+   - Semua fungsi disertai komentar dan keamanan XSS
+   ===================================================================== */
 
-// Ambil elemen form dan tempat hasil
-const form = document.getElementById("user-form");
-const resultDiv = document.getElementById("result");
+document.addEventListener("DOMContentLoaded", () => {
+  // ================================================================
+  // 1. LOAD LIBRARY MARKED.JS UNTUK PARSING MARKDOWN
+  // ================================================================
+  const script = document.createElement("script");
+  script.src = "https://cdn.jsdelivr.net/npm/marked/marked.min.js";
+  script.defer = true;
+  document.head.appendChild(script);
 
-// Session global agar setiap interaksi user masih satu konteks
-let sessionId = null;
+  // ================================================================
+  // 2. DEKLARASI ELEMEN DOM YANG DIGUNAKAN
+  // ================================================================
+  const sendBtn = document.getElementById("sendBtn");
+  const evalBtn = document.getElementById("evalBtn");
+  const chatBox = document.getElementById("chatBox");
+  const userAnswer = document.getElementById("userAnswer");
+  const evalResult = document.getElementById("evalResult");
+  const answerSection = document.getElementById("answerSection");
+  const historySection = document.getElementById("historySection");
+  const questionInput = document.getElementById("question");
+  const styleSelect = document.getElementById("style");
+  const profesiInput = document.getElementById("profesi");
+  const usiaInput = document.getElementById("usia");
+  const downloadTxt = document.getElementById("downloadTxt");
+  const downloadJson = document.getElementById("downloadJson");
 
-// ================================================================
-// EVENT: Saat user menekan tombol "Mulai Bertanya"
-// ================================================================
-form.addEventListener("submit", async (e) => {
-  e.preventDefault(); // cegah reload halaman
-  resultDiv.innerHTML = ""; // kosongkan hasil sebelumnya
+  // ================================================================
+  // 3. VARIABEL STATE
+  // ================================================================
+  let correctAnswer = "";
+  let currentStyle = "";
 
-  // Ambil semua input dari form
-  const formData = new FormData(form);
-  const baseData = {
-    profesi: formData.get("profesi"),
-    umur: parseInt(formData.get("umur")),
-    tipe_kognitif: formData.get("tipe_kognitif"),
-    pertanyaan: formData.get("pertanyaan"),
+  // ================================================================
+  // 4. FUNGSI UTILITY
+  // ================================================================
+
+  // Escape HTML untuk keamanan dari XSS
+  const escapeHtml = (text) => {
+    return String(text)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
   };
 
-  // ==============================================================
-  // Pilih 1 tipe pembanding secara acak selain tipe utama user
-  // ==============================================================
-  const allTypes = ["visual", "auditori", "kinestetik"].filter(
-    (t) => t !== baseData.tipe_kognitif
-  );
-  const shuffled = allTypes.sort(() => Math.random() - 0.5);
-  const [compareType] = shuffled.slice(0, 1);
+  // Render teks dengan Markdown formatting
+  const renderMarkdown = (text) => {
+    if (window.marked) {
+      return marked.parse(text, {
+        breaks: true,
+        gfm: true,
+      });
+    }
+    // fallback kalau marked belum loaded
+    return escapeHtml(text).replace(/\n/g, "<br>");
+  };
 
-  // ==============================================================
-  // Siapkan grid tampilan hasil jawaban (dua kolom)
-  // ==============================================================
-  const grid = document.createElement("div");
-  grid.className = "compare-grid";
-  resultDiv.appendChild(grid);
+  // Tambah bubble chat baru
+  const appendBubble = (cls, html) => {
+    const placeholder = chatBox.querySelector(".placeholder");
+    if (placeholder) placeholder.remove();
 
-  // Buat dua kolom (kiri untuk tipe utama user, kanan untuk pembanding)
-  const left = document.createElement("div");
-  left.className = "compare-col";
+    const div = document.createElement("div");
+    div.className = `chat-bubble ${cls}`;
+    div.innerHTML = html;
+    chatBox.appendChild(div);
+    chatBox.scrollTop = chatBox.scrollHeight;
+    return div;
+  };
 
-  const right = document.createElement("div");
-  right.className = "compare-col";
+  // Aktifkan / nonaktifkan tombol sementara proses berjalan
+  const setBusy = (button, busy) => {
+    if (button) button.disabled = busy;
+  };
 
-  grid.appendChild(left);
-  grid.appendChild(right);
+  // Fungsi unduh file blob
+  const triggerDownload = (blob, filename) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
 
-  // ==============================================================
-  // Tambahkan header untuk masing-masing kolom
-  // ==============================================================
-  const hL = document.createElement("div");
-  hL.className = "compare-header";
-  hL.textContent = `Menurut ${baseData.tipe_kognitif}:`;
-  left.appendChild(hL);
+  // Tambah profesi dan usia ke pertanyaan
+  const formatMessageWithProfile = (msg, prof, age) => {
+    if (!prof && !age) return msg;
+    if (prof && age) return `(${prof}, usia ${age}) ${msg}`;
+    if (prof) return `(${prof}) ${msg}`;
+    return `(usia ${age}) ${msg}`;
+  };
 
-  const hR = document.createElement("div");
-  hR.className = "compare-header";
-  hR.textContent = `Kalau dibandingkan dengan ${compareType}:`;
-  right.appendChild(hR);
+  // ================================================================
+  // 5. EVENT: KIRIM PERTANYAAN KE BACKEND
+  // ================================================================
+  sendBtn.addEventListener("click", async () => {
+    const message = questionInput.value.trim();
+    const style = styleSelect.value;
+    const profesi = profesiInput.value.trim();
+    const usia = usiaInput.value.trim();
 
-  // ==============================================================
-  // Elemen untuk menampilkan jawaban dari AI
-  // ==============================================================
-  const stageDivL = document.createElement("div");
-  const stageDivR = document.createElement("div");
+    if (!message) {
+      alert("Tulis pertanyaan terlebih dahulu!");
+      return;
+    }
 
-  stageDivL.className = "stage";
-  stageDivR.className = "stage";
+    appendBubble("user", `<b>Kamu:</b> ${escapeHtml(message)}`);
+    const loading = appendBubble("status", "<i>Memproses jawaban...</i>");
+    setBusy(sendBtn, true);
 
-  // Tampilkan status awal (loading)
-  stageDivL.innerHTML = `<p>⏳ Sedang memuat jawaban untuk tipe ${baseData.tipe_kognitif}...</p>`;
-  stageDivR.innerHTML = `<p>⏳ Sedang memuat jawaban untuk tipe ${compareType}...</p>`;
+    try {
+      const response = await fetch("/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: formatMessageWithProfile(message, profesi, usia),
+          style,
+        }),
+      });
 
-  left.appendChild(stageDivL);
-  right.appendChild(stageDivR);
+      const data = await response.json();
+      loading.remove();
 
-  // ==============================================================
-  // Kirim data pertanyaan ke backend (Ollama API)
-  // ==============================================================
-  const formReq = new FormData();
-  formReq.append("profesi", baseData.profesi);
-  formReq.append("umur", baseData.umur);
-  formReq.append("tipe_kognitif", baseData.tipe_kognitif);
-  formReq.append("pertanyaan", baseData.pertanyaan);
-  if (sessionId) formReq.append("session_id", sessionId);
+      // Bubble jawaban utama
+      appendBubble(
+        "bot",
+        `<b>GPT-OSS (${escapeHtml(data.style_main)}):</b><br>${renderMarkdown(
+          data.reply_main
+        )}`
+      );
 
-  // Ambil hasil dari backend
-  const response = await fetch("/ask", { method: "POST", body: formReq });
-  const data = await response.json();
-  if (!sessionId) sessionId = data.session_id;
+      // Bubble perbandingan gaya lain
+      appendBubble(
+        "compare",
+        `<b>Perbandingan (${escapeHtml(
+          data.style_compare
+        )}):</b><br>${renderMarkdown(data.reply_compare)}`
+      );
 
-  // ==============================================================
-  // Efek mengetik (typing animation)
-  // ==============================================================
-  await typeText(stageDivL, data.answer_visual || data.answer);
-  await typeText(stageDivR, data.answer_compare || data.answer_compare_type);
+      // Simpan jawaban benar untuk evaluasi
+      correctAnswer = data.reply_main;
+      currentStyle = data.style_main;
 
-  // ==============================================================
-  // Setelah dua jawaban selesai → AI balik bertanya ke user
-  // ==============================================================
-  askBackToUser(baseData);
-});
-
-// ================================================================
-// Fungsi efek mengetik - biar seperti ChatGPT
-// ================================================================
-async function typeText(el, text) {
-  el.innerHTML = "";
-  const p = document.createElement("p");
-  el.appendChild(p);
-
-  // Ngetik huruf demi huruf biar smooth
-  for (let i = 0; i < text.length; i++) {
-    p.textContent += text[i];
-    await new Promise((r) => setTimeout(r, 10)); // jeda antar huruf
-  }
-}
-
-// ================================================================
-// Fungsi untuk membuat form jawaban user setelah AI menjelaskan
-// ================================================================
-async function askBackToUser(userData) {
-  const followDiv = document.createElement("div");
-  followDiv.className = "stage";
-
-  // Teks pengantar untuk user
-  followDiv.innerHTML = `
-    <h3>🧠 Sekarang giliran kamu!</h3>
-    <p>Coba jelaskan kembali dengan bahasamu sendiri agar saya tahu kamu sudah mengerti.</p>
-    <form id="user-answer-form" class="answer-form">
-      <textarea name="jawaban_user" rows="4" placeholder="Tulis jawabanmu di sini..." required></textarea>
-      <button type="submit" class="submit-answer">Kirim Jawaban</button>
-    </form>
-  `;
-
-  resultDiv.appendChild(followDiv);
-
-  // Tangani saat user kirim jawaban
-  const formAnswer = followDiv.querySelector("#user-answer-form");
-
-  formAnswer.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const jawaban_user = formAnswer.jawaban_user.value;
-
-    // Kirim jawaban user untuk divalidasi ke backend
-    const checkForm = new FormData();
-    checkForm.append("profesi", userData.profesi);
-    checkForm.append("umur", userData.umur);
-    checkForm.append("tipe_kognitif", userData.tipe_kognitif);
-    checkForm.append("pertanyaan", userData.pertanyaan);
-    checkForm.append("jawaban_user", jawaban_user);
-    if (sessionId) checkForm.append("session_id", sessionId);
-
-    followDiv.innerHTML = `<p>⏳ Mengevaluasi jawabanmu...</p>`;
-
-    const res = await fetch("/check_answer", {
-      method: "POST",
-      body: checkForm,
-    });
-
-    const hasil = await res.json();
-
-    // ============================================================
-    // Tampilkan hasil evaluasi: benar atau salah
-    // ============================================================
-    const feedbackDiv = document.createElement("div");
-    feedbackDiv.className = "feedback";
-
-    if (hasil.correct) {
-      // Jika jawaban user benar
-      feedbackDiv.innerHTML = `
-        <p>✅ <strong>Benar!</strong> ${hasil.feedback}</p>
-        <p>Kamu sudah memahami konsep ini dengan baik 🎉</p>
-      `;
-
-      followDiv.replaceWith(feedbackDiv);
-
-      // Munculkan tombol download riwayat
-      showDownloadButtons();
-    } else {
-      // Jika jawaban belum tepat
-      feedbackDiv.innerHTML = `
-        <p>❌ <strong>Belum tepat:</strong> ${hasil.feedback}</p>
-        <p>Coba pikirkan lagi dan kirim ulang jawabanmu.</p>
-      `;
-
-      followDiv.replaceWith(feedbackDiv);
-
-      // Ulangi lagi pertanyaan sampai user paham
-      askBackToUser(userData);
+      // Tampilkan area evaluasi & unduhan
+      answerSection.style.display = "block";
+      historySection.style.display = "block";
+    } catch (err) {
+      loading.remove();
+      appendBubble("bot", `❌ Gagal memproses: ${escapeHtml(String(err))}`);
+    } finally {
+      setBusy(sendBtn, false);
     }
   });
-}
 
-// ================================================================
-// Fungsi menampilkan tombol download setelah user mengerti
-// ================================================================
-function showDownloadButtons() {
-  const btnGroup = document.createElement("div");
-  btnGroup.style.marginTop = "1.5rem";
-  btnGroup.style.display = "flex";
-  btnGroup.style.gap = "0.5rem";
-  btnGroup.style.justifyContent = "center";
-
-  // Tombol download TXT
-  const txtBtn = document.createElement("button");
-  txtBtn.textContent = "📥 Download TXT";
-  txtBtn.type = "button";
-  txtBtn.className = "download-btn txt-btn";
-  txtBtn.onclick = () => {
-    if (sessionId) {
-      window.open(`/download_history?session_id=${sessionId}&format=txt`, "_blank");
+  // ================================================================
+  // 6. EVENT: EVALUASI JAWABAN SISWA
+  // ================================================================
+  evalBtn.addEventListener("click", async () => {
+    const answer = userAnswer.value.trim();
+    if (!answer) {
+      alert("Tulis jawabanmu dulu!");
+      return;
     }
-  };
 
-  // Tombol download JSON
-  const jsonBtn = document.createElement("button");
-  jsonBtn.textContent = "📥 Download JSON";
-  jsonBtn.type = "button";
-  jsonBtn.className = "download-btn json-btn";
-  jsonBtn.onclick = () => {
-    if (sessionId) {
-      window.open(`/download_history?session_id=${sessionId}&format=json`, "_blank");
+    appendBubble("user", `<b>Jawaban Kamu:</b> ${escapeHtml(answer)}`);
+    const scoring = appendBubble("status", "<i>Menilai jawaban kamu...</i>");
+    setBusy(evalBtn, true);
+
+    try {
+      const response = await fetch("/evaluate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answer, correct_answer: correctAnswer }),
+      });
+
+      const data = await response.json();
+      scoring.remove();
+
+      evalResult.className = "eval-result " + (data.is_correct ? "correct" : "incorrect");
+      evalResult.innerHTML = renderMarkdown(data.feedback || "");
+
+      appendBubble(
+        "bot",
+        data.is_correct
+          ? `✅ <b>Benar!</b> ${renderMarkdown(data.feedback)}`
+          : `❌ <b>Salah.</b> ${renderMarkdown(data.feedback)}`
+      );
+    } catch (err) {
+      scoring.remove();
+      appendBubble("bot", `❌ Error evaluasi: ${escapeHtml(String(err))}`);
+    } finally {
+      setBusy(evalBtn, false);
     }
-  };
+  });
 
-  btnGroup.appendChild(txtBtn);
-  btnGroup.appendChild(jsonBtn);
-  resultDiv.appendChild(btnGroup);
-}
+  // ================================================================
+  // 7. EVENT: UNDUH RIWAYAT (TXT)
+  // ================================================================
+  downloadTxt.addEventListener("click", async () => {
+    try {
+      const res = await fetch("/history?format=txt");
+      const data = await res.json();
+      const blob = new Blob([data.data || ""], { type: "text/plain" });
+      triggerDownload(blob, "history.txt");
+    } catch (err) {
+      appendBubble("bot", `❌ Gagal mengunduh TXT: ${escapeHtml(String(err))}`);
+    }
+  });
 
-// ================================================================
-// (Optional) Utility tambahan kalau mau efek fade-in typing
-// ================================================================
-function fadeIn(el) {
-  el.style.opacity = 0;
-  let op = 0;
-  const timer = setInterval(() => {
-    if (op >= 1) clearInterval(timer);
-    el.style.opacity = op;
-    op += 0.1;
-  }, 30);
-}
+  // ================================================================
+  // 8. EVENT: UNDUH RIWAYAT (JSON)
+  // ================================================================
+  downloadJson.addEventListener("click", async () => {
+    try {
+      const res = await fetch("/history?format=json");
+      const data = await res.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: "application/json",
+      });
+      triggerDownload(blob, "history.json");
+    } catch (err) {
+      appendBubble("bot", `❌ Gagal mengunduh JSON: ${escapeHtml(String(err))}`);
+    }
+  });
+});
