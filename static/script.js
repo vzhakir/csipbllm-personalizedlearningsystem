@@ -49,10 +49,8 @@ form.addEventListener("submit", async (e) => {
 
   // === Pilih 2 tipe random untuk pembanding ===
   const allTypes = ["visual", "auditori", "kinestetik"];
-  const leftType = userData.tipe_kognitif;
-  const remainingTypes = allTypes.filter((type) => type !== leftType);
-  const rightType =
-    remainingTypes[Math.floor(Math.random() * remainingTypes.length)] || leftType;
+  const shuffled = allTypes.sort(() => Math.random() - 0.5);
+  const [leftType, rightType] = shuffled.slice(0, 2);
 
   // === Grid compare ===
   const grid = document.createElement("div");
@@ -70,12 +68,12 @@ form.addEventListener("submit", async (e) => {
 
   const hL = document.createElement("div");
   hL.className = "compare-header";
-  hL.textContent = `Tipe kognitif utama: ${leftType}`;
+  hL.textContent = `Tipe kognitif: ${leftType}`;
   left.appendChild(hL);
 
   const hR = document.createElement("div");
   hR.className = "compare-header";
-  hR.textContent = `Tipe kognitif pembanding: ${rightType}`;
+  hR.textContent = `Tipe kognitif: ${rightType}`;
   right.appendChild(hR);
 
   // === Panggil bot untuk jawaban utama dan perbandingan ===
