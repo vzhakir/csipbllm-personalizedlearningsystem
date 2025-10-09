@@ -16,7 +16,7 @@ app.add_middleware(
 
 # Konfigurasi Ollama
 OLLAMA_API_URL = "http://localhost:11434/api/generate"
-MODEL_NAME = "gpt-oss"
+MODEL_NAME = "deepseek-r1:8b"
 
 # Simpan histori percakapan (per session_id)
 sessions = {}
@@ -46,24 +46,22 @@ async def ask(
         sessions[session_id] = []
 
     prompt = f"""
-Kamu adalah **asisten pembelajaran interaktif** yang menjelaskan materi sesuai tipe kognitif pengguna.
+Kamu adalah asisten belajar yang sabar dan adaptif.
+Gunakan gaya penjelasan sesuai tipe kognitif pengguna.
 
-### Informasi Pengguna:
+Informasi pengguna:
 - Profesi: {profesi}
-- Usia: {umur} tahun
-- Tipe Belajar Utama: {tipe_kognitif}
+- Umur: {umur}
+- Tipe belajar: {tipe_kognitif}
 
-### Pertanyaan Pengguna:
+Pertanyaan dari pengguna:
 "{pertanyaan}"
 
-### Instruksi:
-1. Jawablah dengan bahasa sederhana, jelas, dan mudah dipahami.
-2. Sesuaikan gaya penjelasan dengan tipe kognitif:
-   - **Visual** → gunakan deskripsi gambar, diagram, atau peta konsep.
-   - **Auditori** → gunakan gaya bercerita, analogi suara, atau percakapan.
-   - **Kinestetik** → gunakan contoh praktik, gerakan, atau eksperimen langsung.
-3. Sertakan poin penting dalam bullet agar lebih terstruktur.
-4. Jangan menjawab terlalu panjang, cukup ringkas tapi bermakna.
+Buat dua bagian:
+1. Penjelasan utama berdasarkan tipe kognitif {tipe_kognitif}.
+2. Bandingkan secara singkat dengan satu tipe kognitif lain yang relevan (pilih acak antara auditori/visual/kinestetik).
+
+Jawablah dalam gaya alami, pendek, dan jelas.
 """
 
     answer = call_ollama(prompt)
