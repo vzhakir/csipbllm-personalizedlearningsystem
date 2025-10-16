@@ -1,19 +1,21 @@
 /* =====================================================================
-   CSIPBLLM — Personalized Learning Frontend Script (FULL VERBOSE)
+   CSIPBLLM — Personalized Learning Frontend Script
+   FINAL (Interactive Follow-up + Adaptive Hints + CT-Friendly + Dynamic Lock)
    ---------------------------------------------------------------------
    Fitur:
-   ✅ Kirim pertanyaan ke backend (ollamaapi.py)
-   ✅ Gaya belajar (Visual, Auditori, Kinestetik)
-   ✅ Render Markdown (marked.js)
-   ✅ Evaluasi jawaban siswa
-   ✅ Unduh riwayat (txt/json)
-   ✅ Efek mengetik ala ChatGPT
-   ✅ Aman dari XSS
+   ✅ Mode dinamis (Input ↔ Evaluasi ↔ New Chat)
+   ✅ Bot follow-up setelah menjawab pertanyaan
+   ✅ Evaluasi dengan adaptive hint bertingkat
+   ✅ Code-friendly (Computational Thinking)
+   ✅ Riwayat percakapan + unduh TXT/JSON
+   ✅ Input otomatis dikunci setelah pertanyaan dikirim
+   ✅ Tombol ✨ New Chat untuk memulai ulang
+   ✅ Tidak ada fitur yang dihapus
    ===================================================================== */
 
 document.addEventListener("DOMContentLoaded", () => {
   // ================================================================
-  // 1. LOAD LIBRARY MARKED.JS UNTUK PARSING MARKDOWN
+  // 1. LOAD MARKED.JS UNTUK MARKDOWN
   // ================================================================
   const script = document.createElement("script");
   script.src = "https://cdn.jsdelivr.net/npm/marked/marked.min.js";
@@ -21,7 +23,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.head.appendChild(script);
 
   // ================================================================
-  // 2. DEKLARASI ELEMEN DOM
+  // 2. AMBIL ELEMEN DOM
   // ================================================================
   const sendBtn = document.getElementById("sendBtn");
   const evalBtn = document.getElementById("evalBtn");
@@ -36,12 +38,16 @@ document.addEventListener("DOMContentLoaded", () => {
   const usiaInput = document.getElementById("usia");
   const downloadTxt = document.getElementById("downloadTxt");
   const downloadJson = document.getElementById("downloadJson");
+  const inputSection = document.getElementById("inputSection");
+  const newChatBtn = document.getElementById("newChatBtn");
+  const newChatSection = document.getElementById("newChatSection");
 
   let correctAnswer = "";
   let currentStyle = "";
+  let wrongCount = 0;
 
   // ================================================================
-  // 3. UTILITY FUNCTION (KEAMANAN + MARKDOWN + ANIMASI)
+  // 3. UTILITAS
   // ================================================================
   const escapeHtml = (text) =>
     String(text)
@@ -52,16 +58,13 @@ document.addEventListener("DOMContentLoaded", () => {
       .replace(/'/g, "&#039;");
 
   const renderMarkdown = (text) => {
-    if (window.marked) {
-      return marked.parse(text, { breaks: true, gfm: true });
-    }
+    if (window.marked) return marked.parse(text, { breaks: true, gfm: true });
     return escapeHtml(text).replace(/\n/g, "<br>");
   };
 
   const appendBubble = (cls, html) => {
     const placeholder = chatBox.querySelector(".placeholder");
     if (placeholder) placeholder.remove();
-
     const div = document.createElement("div");
     div.className = `chat-bubble ${cls}`;
     div.innerHTML = html;
@@ -103,7 +106,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   // ================================================================
-  // 4. KIRIM PERTANYAAN KE BACKEND
+  // 4. KIRIM PERTANYAAN (MODE INPUT → MODE EVALUASI)
   // ================================================================
   sendBtn.addEventListener("click", async () => {
     const message = questionInput.value.trim();
@@ -120,6 +123,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const typing = showTyping();
     setBusy(sendBtn, true);
 
+    // 🔒 Nonaktifkan semua input agar user tidak ubah konteks
+    profesiInput.disabled = true;
+    usiaInput.disabled = true;
+    questionInput.disabled = true;
+    styleSelect.disabled = true;
+    sendBtn.disabled = true;
+
     try {
       const response = await fetch("/chat", {
         method: "POST",
@@ -135,19 +145,32 @@ document.addEventListener("DOMContentLoaded", () => {
 
       appendBubble(
         "bot",
-        `<b>GPT-OSS (${escapeHtml(data.style_main)}):</b><br>${renderMarkdown(data.reply_main)}`
+        `<b>GPT-OSS (${escapeHtml(data.style_main)}):</b><br>${renderMarkdown(
+          data.reply_main
+        )}`
       );
 
       appendBubble(
         "compare",
-        `<b>Perbandingan (${escapeHtml(data.style_compare)}):</b><br>${renderMarkdown(data.reply_compare)}`
+        `<b>Perbandingan (${escapeHtml(
+          data.style_compare
+        )}):</b><br>${renderMarkdown(data.reply_compare)}`
       );
+
+      // Follow-up langsung dari /chat
+      if (data.followup_question) {
+        appendBubble("bot", `<i>💭 ${renderMarkdown(data.followup_question)}</i>`);
+      }
+
+      // Pindah ke mode evaluasi
+      inputSection.style.display = "none";
+      answerSection.style.display = "block";
+      historySection.style.display = "none";
+      newChatSection.style.display = "none";
 
       correctAnswer = data.reply_main;
       currentStyle = data.style_main;
-
-      answerSection.style.display = "block";
-      historySection.style.display = "block";
+      wrongCount = 0;
     } catch (err) {
       typing.remove();
       appendBubble("bot", `❌ Gagal memproses: ${escapeHtml(String(err))}`);
@@ -156,7 +179,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // ENTER = KIRIM
+  // ENTER untuk kirim
   questionInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -165,7 +188,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // ================================================================
-  // 5. EVALUASI JAWABAN SISWA
+  // 5. EVALUASI JAWABAN SISWA (ADAPTIVE HINT + FOLLOW-UP)
   // ================================================================
   evalBtn.addEventListener("click", async () => {
     const answer = userAnswer.value.trim();
@@ -182,21 +205,58 @@ document.addEventListener("DOMContentLoaded", () => {
       const response = await fetch("/evaluate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ answer, correct_answer: correctAnswer }),
+        body: JSON.stringify({
+          answer,
+          correct_answer: correctAnswer,
+          wrong_count: wrongCount,
+        }),
       });
 
       const data = await response.json();
       scoring.remove();
 
-      evalResult.className = "eval-result " + (data.is_correct ? "correct" : "incorrect");
-      evalResult.innerHTML = renderMarkdown(data.feedback || "");
+      if (data.is_correct) {
+        wrongCount = 0;
+        evalResult.className = "eval-result correct";
+        evalResult.innerHTML = renderMarkdown(data.feedback || "");
+        appendBubble(
+          "bot",
+          `✅ <b>Benar!</b> ${renderMarkdown(
+            data.feedback
+          )}<br><i>(Confirmatory Feedback)</i>`
+        );
+        historySection.style.display = "block";
+        newChatSection.style.display = "block"; // tampilkan tombol New Chat
+      } else {
+        wrongCount++;
+        evalResult.className = "eval-result incorrect";
 
-      appendBubble(
-        "bot",
-        data.is_correct
-          ? `✅ <b>Benar!</b> ${renderMarkdown(data.feedback)}`
-          : `❌ <b>Salah.</b> ${renderMarkdown(data.feedback)}`
-      );
+        let hintLabel =
+          wrongCount === 1
+            ? "🧩 Directive Hint"
+            : wrongCount === 2
+            ? "🪜 Remedial Scaffold"
+            : "🧭 Facilitative Step-by-Step Guide";
+
+        appendBubble(
+          "bot",
+          `❌ <b>Salah (${wrongCount}×)</b><br>${renderMarkdown(
+            data.feedback
+          )}<br><i>${hintLabel}</i>`
+        );
+
+        evalResult.innerHTML = renderMarkdown(
+          `${data.feedback}\n\n**${hintLabel}**`
+        );
+
+        // Follow-up question dari backend
+        if (data.followup_question) {
+          appendBubble(
+            "bot",
+            `<i>💭 ${renderMarkdown(data.followup_question)}</i>`
+          );
+        }
+      }
     } catch (err) {
       scoring.remove();
       appendBubble("bot", `❌ Error evaluasi: ${escapeHtml(String(err))}`);
@@ -206,7 +266,29 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // ================================================================
-  // 6. UNDUH RIWAYAT TXT
+  // 6. NEW CHAT BUTTON — RESET SEMUA
+  // ================================================================
+  newChatBtn.addEventListener("click", () => {
+    chatBox.innerHTML = `<div class="placeholder">💬 Mulai percakapan dengan mengetik pertanyaan...</div>`;
+    inputSection.style.display = "block";
+    answerSection.style.display = "none";
+    historySection.style.display = "none";
+    newChatSection.style.display = "none";
+    questionInput.value = "";
+    userAnswer.value = "";
+    evalResult.innerHTML = "";
+    wrongCount = 0;
+
+    // 🔓 Aktifkan kembali input
+    profesiInput.disabled = false;
+    usiaInput.disabled = false;
+    questionInput.disabled = false;
+    styleSelect.disabled = false;
+    sendBtn.disabled = false;
+  });
+
+  // ================================================================
+  // 7. UNDUH RIWAYAT (TXT & JSON)
   // ================================================================
   downloadTxt.addEventListener("click", async () => {
     try {
@@ -219,9 +301,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // ================================================================
-  // 7. UNDUH RIWAYAT JSON
-  // ================================================================
   downloadJson.addEventListener("click", async () => {
     try {
       const res = await fetch("/history?format=json");

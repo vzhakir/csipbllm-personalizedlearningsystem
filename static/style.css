@@ -1,11 +1,23 @@
 /* ==============================================================
-   CHATGPT-STYLE UI FOR CSIPBLLM
+   CHATGPT-STYLE UI FOR CSIPBLLM (Final Polished)
    ============================================================== */
+
+:root{
+  --brand:#1e2a5e;
+  --brand-2:#16204d;
+  --bg:#f3f4f6;
+  --card:#ffffff;
+  --muted:#777;
+  --border:#ddd;
+  --shadow:0 1px 6px rgba(0,0,0,0.06);
+}
+
+*{ box-sizing: border-box; }
 
 body {
   margin: 0;
   font-family: "Segoe UI", Tahoma, sans-serif;
-  background-color: #f3f4f6;
+  background-color: var(--bg);
   color: #222;
 }
 
@@ -15,16 +27,17 @@ body {
   max-width: 900px;
   height: 100vh;
   margin: 0 auto;
-  background: white;
-  border-left: 1px solid #ddd;
-  border-right: 1px solid #ddd;
+  background: var(--card);
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
 }
 
 header {
-  background: #1e2a5e;
+  background: var(--brand);
   color: white;
   padding: 1rem;
   text-align: center;
+  box-shadow: var(--shadow);
 }
 
 header h1 { margin: 0.3rem 0; }
@@ -34,13 +47,14 @@ main {
   display: flex;
   flex-direction: column;
   padding: 1rem;
+  gap: .6rem;
 }
 
 .chat-box {
   flex: 1;
   overflow-y: auto;
-  border: 1px solid #ddd;
-  border-radius: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
   background: #fff;
   padding: 1rem;
   box-shadow: inset 0 0 6px rgba(0,0,0,0.05);
@@ -55,14 +69,14 @@ main {
   padding: 0.8rem 1rem;
   border-radius: 14px;
   max-width: 75%;
-  line-height: 1.5;
+  line-height: 1.55;
   white-space: pre-wrap;
-  animation: fadeIn 0.3s ease;
+  animation: fadeIn 0.25s ease;
 }
 
 .user {
   align-self: flex-end;
-  background: #1e2a5e;
+  background: var(--brand);
   color: white;
   border-bottom-right-radius: 0;
 }
@@ -76,8 +90,51 @@ main {
 
 .status {
   font-style: italic;
-  color: #777;
+  color: var(--muted);
   align-self: flex-start;
+}
+
+/* Markdown/code prettiness */
+.chat-bubble pre, .chat-bubble code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  background: #0f172a0d;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  padding: .25rem .4rem;
+  overflow-x: auto;
+}
+.chat-bubble pre { padding: .6rem .8rem; }
+
+/* Controls */
+.controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.controls input,
+.controls textarea {
+  flex: 1;
+  border-radius: 10px;
+  border: 1px solid #ccc;
+  padding: 0.6rem .75rem;
+  resize: none;
+  background: #fff;
+}
+
+.controls select,
+.controls button {
+  border: none;
+  border-radius: 10px;
+  background: var(--brand);
+  color: white;
+  padding: 0.6rem 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+
+.controls button:hover {
+  background: var(--brand-2);
 }
 
 @keyframes fadeIn {
@@ -85,44 +142,55 @@ main {
   to { opacity: 1; transform: translateY(0); }
 }
 
-.controls {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 1rem;
-}
-
-.controls input,
-.controls textarea {
-  flex: 1;
-  border-radius: 8px;
-  border: 1px solid #ccc;
-  padding: 0.6rem;
-  resize: none;
-}
-
-.controls select,
-.controls button {
-  border: none;
-  border-radius: 8px;
-  background: #1e2a5e;
-  color: white;
-  padding: 0.6rem 1rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.controls button:hover {
-  background: #16204d;
-}
-
+/* Cards: Evaluation & History */
 .evaluation, .history {
-  margin-top: 1rem;
-  border-top: 1px solid #eee;
-  padding-top: 0.6rem;
+  background: #f9fafc;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  padding: 1rem;
+  box-shadow: var(--shadow);
+  margin-top: .4rem;
+}
+
+.evaluation h3, .history h3 { margin-top: 0; color: var(--brand); }
+
+#userAnswer {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid #ccc;
+  padding: 0.6rem .75rem;
+  margin-bottom: 0.6rem;
+  background: #fff;
+}
+
+#evalResult {
+  margin-top: 0.6rem;
+  font-weight: 600;
 }
 
 .eval-result.correct { color: #2d882d; }
 .eval-result.incorrect { color: #c82333; }
+
+.history-buttons {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.history button {
+  background: var(--brand);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  font-weight: 600;
+  box-shadow: var(--shadow);
+}
+
+.history button:hover {
+  background: var(--brand-2);
+}
 
 footer {
   background: #f8f8f8;
@@ -130,4 +198,18 @@ footer {
   color: #666;
   padding: 0.6rem;
   font-size: 0.9rem;
+}
+
+#newChatBtn {
+  background: #1e2a5e;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  padding: 0.6rem 1.2rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+#newChatBtn:hover {
+  background: #16204d;
 }
