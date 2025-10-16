@@ -1,26 +1,44 @@
 /* =====================================================================
    CSIPBLLM — Personalized Learning Frontend Script
-   FINAL (Interactive Follow-up + Adaptive Hints + CT-Friendly + Dynamic Lock)
+   FINAL VERSION (Dark/Light Toggle + Dynamic UI + Adaptive Hints + CT-Friendly)
    ---------------------------------------------------------------------
    Fitur:
+   ✅ Manual Dark/Light Mode Toggle 🌞 / 🌙 (disimpan di localStorage)
    ✅ Mode dinamis (Input ↔ Evaluasi ↔ New Chat)
-   ✅ Bot follow-up setelah menjawab pertanyaan
-   ✅ Evaluasi dengan adaptive hint bertingkat
+   ✅ Bot follow-up otomatis setelah menjawab
+   ✅ Evaluasi adaptif (Directive → Remedial → Facilitative)
    ✅ Code-friendly (Computational Thinking)
    ✅ Riwayat percakapan + unduh TXT/JSON
    ✅ Input otomatis dikunci setelah pertanyaan dikirim
-   ✅ Tombol ✨ New Chat untuk memulai ulang
+   ✅ Tombol ✨ New Chat untuk memulai ulang sesi
    ✅ Tidak ada fitur yang dihapus
    ===================================================================== */
 
 document.addEventListener("DOMContentLoaded", () => {
   // ================================================================
-  // 1. LOAD MARKED.JS UNTUK MARKDOWN
+  // 1. 🌓 THEME TOGGLE (Dark/Light Mode)
   // ================================================================
-  const script = document.createElement("script");
-  script.src = "https://cdn.jsdelivr.net/npm/marked/marked.min.js";
-  script.defer = true;
-  document.head.appendChild(script);
+  const themeToggle = document.getElementById("themeToggle");
+
+  const applyTheme = (theme) => {
+    document.documentElement.setAttribute("data-theme", theme);
+    themeToggle.textContent = theme === "dark" ? "🌞" : "🌙";
+  };
+
+  const savedTheme = localStorage.getItem("theme");
+  if (savedTheme) {
+    applyTheme(savedTheme);
+  } else {
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    applyTheme(prefersDark ? "dark" : "light");
+  }
+
+  themeToggle.addEventListener("click", () => {
+    const current = document.documentElement.getAttribute("data-theme");
+    const next = current === "dark" ? "light" : "dark";
+    applyTheme(next);
+    localStorage.setItem("theme", next);
+  });
 
   // ================================================================
   // 2. AMBIL ELEMEN DOM
@@ -123,7 +141,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const typing = showTyping();
     setBusy(sendBtn, true);
 
-    // 🔒 Nonaktifkan semua input agar user tidak ubah konteks
+    // 🔒 Kunci input agar user tidak ubah konteks
     profesiInput.disabled = true;
     usiaInput.disabled = true;
     questionInput.disabled = true;
@@ -179,7 +197,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // ENTER untuk kirim
+  // ENTER = kirim
   questionInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
