@@ -1,157 +1,63 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <!-- ============================================================
-       METADATA DASAR
-       - Charset UTF-8 agar karakter Indonesia tampil benar
-       - Viewport untuk tampilan responsif di mobile
-       ============================================================ -->
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-
-  <!-- ============================================================
-       JUDUL HALAMAN
-       ============================================================ -->
-  <title>CSIPBLLM — Personalized Learning System</title>
-
-  <!-- ============================================================
-       CSS
-       PENTING: gunakan path absolut /static/ agar FastAPI bisa serve
-       ============================================================ -->
-  <link rel="stylesheet" href="/static/style.css"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CSIPBLLM - Personalized Learning Chatbot</title>
+  <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-  <!-- ============================================================
-       WRAPPER / CONTAINER UTAMA
-       ============================================================ -->
-  <div class="container">
+  <div class="chat-wrapper">
+    <header>
+      <h1>🤖 CSIPBLLM Personalized Learning System</h1>
+      <p>Ditenagai oleh Ollama GPT-OSS — 3 Gaya Belajar</p>
+    </header>
 
-    <!-- ==========================================================
-         HEADER / TITLE
-         ========================================================== -->
-    <h1>Personalized Learning System</h1>
-    <p class="subtitle">Ditenagai oleh <b>Ollama GPT-OSS</b></p>
-
-    <!-- ==========================================================
-         PROFIL PENGGUNA
-         - Disimpan untuk konteks (profesi & usia)
-         - Tidak mengubah struktur, ID tetap sama (profesi, usia)
-         ========================================================== -->
-    <section class="profile-section">
-      <h3>Profil Pengguna</h3>
-      <p>Informasi ini membantu sistem menyesuaikan gaya penjelasan sesuai karakter kamu.</p>
-
-      <!-- input profesi -->
-      <input
-        type="text"
-        id="profesi"
-        placeholder="Profesi kamu (contoh: Siswa, Guru, Mahasiswa...)"
-        autocomplete="on"
-      />
-
-      <!-- input usia -->
-      <input
-        type="number"
-        id="usia"
-        placeholder="Usia kamu"
-        min="5"
-        max="110"
-        inputmode="numeric"
-      />
-    </section>
-
-    <!-- ==========================================================
-         PERTANYAAN / MATERI
-         - ID dan urutan tombol dipertahankan
-         - Dropdown TANPA 'netral' (hanya 3 tipe)
-         ========================================================== -->
-    <section class="question-section">
-      <h3>Pertanyaan / Materi</h3>
-
-      <!-- textarea pertanyaan -->
-      <textarea
-        id="question"
-        placeholder="Tulis pertanyaan atau topik yang ingin kamu pelajari..."
-        rows="4"
-      ></textarea>
-
-      <!-- pilihan gaya belajar (netral DIHAPUS) -->
-      <label for="style">Pilih Gaya Belajar:</label>
-      <select id="style">
-        <option value="visual" selected>Visual</option>
-        <option value="auditori">Auditori</option>
-        <option value="kinestetik">Kinestetik</option>
-      </select>
-
-      <!-- tombol kirim pertanyaan (ID dipertahankan) -->
-      <button id="sendBtn" title="Kirim ke bot">Kirim Pertanyaan</button>
-    </section>
-
-    <!-- ==========================================================
-         PERCAKAPAN
-         - Chat log tampil berurutan (user → bot → compare)
-         - Bubble “loading” akan dihapus saat jawaban selesai
-         ========================================================== -->
-    <section class="chat-section">
-      <h3>Percakapan</h3>
-
-      <!-- chatBox: placeholder awal akan tergantikan oleh bubble -->
-      <div id="chatBox" aria-live="polite">
-        <p class="placeholder">
-          Belum ada percakapan. Tulis pertanyaan di atas dan klik <b>Kirim</b>.
-        </p>
+    <main>
+      <!-- Kotak Chat -->
+      <div id="chatBox" class="chat-box">
+        <div class="placeholder">💬 Mulai percakapan dengan mengetik pertanyaan...</div>
       </div>
-    </section>
 
-    <!-- ==========================================================
-         JAWABAN SISWA
-         - Hanya tampil SETELAH bot menjawab
-         - ID & struktur dipertahankan
-         ========================================================== -->
-    <section class="answer-section" id="answerSection" style="display:none;">
-      <h3>Jawaban Kamu</h3>
-      <p>Setelah membaca penjelasan dari bot, tulis jawabanmu di bawah untuk dinilai.</p>
-
-      <textarea
-        id="userAnswer"
-        placeholder="Tulis jawaban kamu di sini..."
-        rows="3"
-      ></textarea>
-
-      <!-- tombol kirim jawaban untuk evaluasi -->
-      <button id="evalBtn" title="Kirim jawaban untuk dinilai">Kirim Jawaban</button>
-
-      <!-- hasil evaluasi (warna hijau/merah via CSS class) -->
-      <div id="evalResult" class="eval-result"></div>
-    </section>
-
-    <!-- ==========================================================
-         RIWAYAT
-         - TOMBOL DOWNLOAD BARU MUNCUL JIKA JAWABAN BENAR ✅
-         - ID dipertahankan (historySection, downloadTxt, downloadJson)
-         ========================================================== -->
-    <section class="history-section" id="historySection" style="display:none;">
-      <h3>Unduh Riwayat Percakapan</h3>
-      <p class="note">Tombol akan muncul setelah jawaban kamu dinilai <b>Benar</b>.</p>
-
-      <div id="historyButtons" style="display:none;">
-        <button id="downloadTxt" title="Unduh sebagai .txt">Download TXT</button>
-        <button id="downloadJson" title="Unduh sebagai .json">Download JSON</button>
+      <!-- Input & Kontrol -->
+      <div class="controls">
+        <input id="profesi" type="text" placeholder="Profesi (opsional)" />
+        <input id="usia" type="number" placeholder="Usia (opsional)" />
       </div>
-    </section>
 
-    <!-- ==========================================================
-         FOOTER
-         ========================================================== -->
+      <div class="controls">
+        <textarea id="question" placeholder="Tulis pertanyaan di sini..." rows="2"></textarea>
+        <select id="style">
+          <option value="visual">Visual</option>
+          <option value="auditori">Auditori</option>
+          <option value="kinestetik">Kinestetik</option>
+        </select>
+        <button id="sendBtn">Kirim</button>
+      </div>
+
+      <!-- Evaluasi -->
+      <section id="answerSection" class="evaluation" style="display:none;">
+        <h3>🧠 Evaluasi Jawaban Siswa</h3>
+        <textarea id="userAnswer" placeholder="Tulis jawaban siswa..." rows="3"></textarea>
+        <button id="evalBtn">Nilai Jawaban</button>
+        <div id="evalResult" class="eval-result"></div>
+      </section>
+
+      <!-- Riwayat -->
+      <section id="historySection" class="history" style="display:none;">
+        <h3>📜 Riwayat Percakapan</h3>
+        <div class="history-buttons">
+          <button id="downloadTxt">Unduh TXT</button>
+          <button id="downloadJson">Unduh JSON</button>
+        </div>
+      </section>
+    </main>
+
     <footer>
-      © 2025 CSIPBLLM Personalized Learning — Powered by Ollama GPT-OSS
+      © 2025 CSIPBLLM — Dibuat dengan ❤️ menggunakan Ollama GPT-OSS
     </footer>
   </div>
 
-  <!-- ============================================================
-       JAVASCRIPT
-       PENTING: gunakan /static/script.js (bukan relatif)
-       ============================================================ -->
   <script src="/static/script.js"></script>
 </body>
 </html>

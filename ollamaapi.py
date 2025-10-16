@@ -9,7 +9,7 @@
 #   ✅ Riwayat percakapan + download (txt/json)
 #   ✅ Deteksi otomatis port Ollama (11435/11434)
 #   ✅ Hanya 3 gaya belajar: Visual, Auditori, Kinestetik
-# ================================================================
+# ================================================================'
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse
@@ -26,15 +26,15 @@ import time
 # KONFIGURASI DASAR FASTAPI
 # ================================================================
 
-app = FastAPI(title="CSIPBLLM Personalized Learning System")
+# Inisialisasi FastAPI
+app = FastAPI(title="Manual Self-Learning AI - Stable")
 
-# Lokasi folder frontend (static)
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+if os.path.isdir(STATIC_DIR):
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 @app.get("/")
 def serve_index():
-    """Menampilkan halaman utama index.html"""
     index_path = os.path.join(STATIC_DIR, "index.html")
     if os.path.exists(index_path):
         return FileResponse(index_path)
@@ -45,7 +45,7 @@ def serve_index():
 # ================================================================
 
 OLLAMA_PORTS = [11435, 11434]
-MODEL_NAME = "gpt-oss"
+MODEL_NAME = "deepseek-r1:8b"
 OLLAMA_API_URL = None
 
 # Deteksi port aktif Ollama
@@ -101,7 +101,7 @@ def query_ollama(prompt: str, retries: int = 3, delay: int = 5) -> str:
     for attempt in range(retries):
         try:
             print(f"[OllamaAPI] 🚀 Kirim prompt ke {MODEL_NAME} (Percobaan {attempt + 1}/{retries})")
-            response = requests.post(OLLAMA_API_URL, json=payload, timeout=300)
+            response = requests.post(OLLAMA_API_URL, json=payload, timeout=1500)
 
             if response.status_code == 200:
                 try:
