@@ -1,68 +1,186 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CSIPBLLM - Personalized Learning Chatbot</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1220" />
+  <title>CSIPBLLM Personalized Learning System</title>
+
+  <!-- Anti-cache -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+
+  <link rel="manifest" href="/static/manifest.json" />
+  <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/2983/2983798.png" />
   <link rel="stylesheet" href="/static/style.css" />
 </head>
-<body>
-  <div class="chat-wrapper">
-    <header>
-      <h1>🤖 CSIPBLLM Personalized Learning System</h1>
-      <p>Ditenagai oleh Ollama GPT-OSS — 3 Gaya Belajar</p>
-      <button id="themeToggle" class="theme-toggle" title="Ganti tema">🌙</button>
-    </header>
 
-    <main>
-      <!-- Kotak Chat -->
-      <div id="chatBox" class="chat-box">
-        <div class="placeholder">💬 Mulai percakapan dengan mengetik pertanyaan...</div>
+<body class="dark">
+  <!-- =======================================================
+       HEADER
+  ======================================================== -->
+  <header id="mainHeader" class="elev-1">
+    <div class="header-left">
+      <button id="sidebarToggle" class="icon-btn" aria-label="Buka/teutup dashboard">☰</button>
+      <div class="branding">
+        <h1 class="app-title">CSIPBLLM Personalized Learning System</h1>
+        <p class="subtitle">Ditenagai Ollama DeepSeek-R1:8b — Pembelajaran adaptif</p>
       </div>
-
-      <!-- Input & Kontrol -->
-      <div class="controls">
-        <input id="profesi" type="text" placeholder="Profesi (opsional)" />
-        <input id="usia" type="number" placeholder="Usia (opsional)" />
-      </div>
-
-      <div class="controls">
-        <textarea id="question" placeholder="Tulis pertanyaan di sini..." rows="2"></textarea>
-        <select id="style">
-          <option value="visual">Visual</option>
-          <option value="auditori">Auditori</option>
-          <option value="kinestetik">Kinestetik</option>
-        </select>
-        <button id="sendBtn">Kirim</button>
-      </div>
-
-      <!-- Evaluasi -->
-      <section id="answerSection" class="evaluation" style="display:none;">
-        <h3>🧠 Evaluasi Jawaban Siswa</h3>
-        <textarea id="userAnswer" placeholder="Tulis jawaban siswa (boleh pseudocode/kode)..." rows="3"></textarea>
-        <button id="evalBtn">Nilai Jawaban</button>
-        <div id="evalResult" class="eval-result"></div>
-      </section>
-
-      <!-- Riwayat -->
-      <section id="historySection" class="history" style="display:none;">
-        <h3>📜 Riwayat Percakapan</h3>
-        <div class="history-buttons">
-          <button id="downloadTxt">Unduh TXT</button>
-          <button id="downloadJson">Unduh JSON</button>
-        </div>
-      </section>
-    </main>
-
-    <div id="newChatSection" style="display:none; text-align:center; margin-top:1rem;">
-    <button id="newChatBtn">✨ New Chat</button>
     </div>
 
-    <footer>
-      © 2025 CSIPBLLM — Dibuat dengan ❤️ menggunakan Ollama GPT-OSS
-    </footer>
+    <div class="header-right">
+      <button id="themeToggle" class="icon-btn" title="Ganti Tema">🌙</button>
+      <select id="modelSelector" class="select hidden"></select>
+    </div>
+  </header>
+
+  <!-- =======================================================
+       LAYOUT WRAPPER
+  ======================================================== -->
+  <div id="layout" class="layout">
+
+    <!-- =====================================================
+         SIDEBAR
+    ====================================================== -->
+    <aside id="sidebar" class="sidebar hidden">
+      <div class="sb-inner">
+
+        <div class="sb-section">
+          <h2 class="sb-title">📊 Dashboard</h2>
+
+          <div class="sb-actions">
+            <button id="recommendBtn" class="btn btn-primary w-full">📘 Rekomendasi Belajar</button>
+            <button id="clearBtn" class="btn btn-danger w-full">🗑️ Hapus Chat</button>
+
+            <!-- ⭐ Prompt Engineering Lab -->
+            <button id="promptLabBtn" class="btn btn-primary w-full">
+              ⚗️ Prompt Engineering Lab
+            </button>
+            <!-- ⭐ End -->
+          </div>
+        </div>
+
+        <hr class="divider" />
+
+        <div class="sb-section">
+          <h3 class="sb-subtitle">🕓 Riwayat Chat</h3>
+          <ul id="historyList" class="history-list"></ul>
+        </div>
+
+        <footer class="sb-footer">
+          <small>Frontend 1.0 — Backend CSIPBLLM Ultra 5.2.0</small>
+        </footer>
+      </div>
+    </aside>
+
+    <!-- =====================================================
+         MAIN CHAT
+    ====================================================== -->
+    <main id="main" class="main">
+      <section id="chatShell" class="chat-shell elev-1">
+
+        <div id="chatBox" class="chat-box"></div>
+
+        <div id="typingIndicator" class="typing-indicator" aria-hidden="true">
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="ti-text">Bot sedang mengetik…</span>
+        </div>
+
+      </section>
+    </main>
   </div>
 
-  <script src="/static/script.js"></script>
+  <!-- =======================================================
+       COMPOSER
+  ======================================================== -->
+  <section id="composer" class="composer elev-1">
+    <div class="composer-row meta">
+      <input id="profession" class="input" type="text" placeholder="Profesi (opsional)" />
+      <input id="age" class="input" type="number" placeholder="Usia (opsional)" />
+      <select id="style" class="select">
+        <option value="Visual">Visual</option>
+        <option value="Auditori">Auditori</option>
+        <option value="Kinestetik">Kinestetik</option>
+      </select>
+    </div>
+
+    <div class="composer-row input-row">
+      <textarea id="question" class="textarea" placeholder="Tulis pertanyaanmu…" rows="2"></textarea>
+      <button id="sendBtn" class="btn btn-primary btn-send">Kirim</button>
+    </div>
+  </section>
+
+  <!-- =======================================================
+       FOOTER
+  ======================================================== -->
+  <footer id="footer" class="footer">
+    <p>© 2025 CSIPBLLM Adaptive Learning</p>
+    <p class="muted">DeepSeek-R1:8b via Ollama — Sistem Pembelajaran Adaptif</p>
+  </footer>
+
+  <!-- =======================================================
+       LOADING OVERLAY
+  ======================================================== -->
+  <div id="loadingOverlay" class="overlay hidden">
+    <div class="loader"></div>
+    <p>Memproses permintaanmu…</p>
+  </div>
+
+  <!-- =======================================================
+       MODAL ABOUT
+  ======================================================== -->
+  <div id="aboutModal" class="modal hidden">
+    <div class="modal-content elev-2">
+      <button id="closeAbout" class="icon-btn modal-close">✕</button>
+      <h2 class="modal-title">Tentang CSIPBLLM</h2>
+      <p>Sistem pembelajaran adaptif berbasis gaya belajar.</p>
+      <ul class="modal-list">
+        <li>Penjelasan adaptif</li>
+        <li>Dual-cognitive output</li>
+        <li>Evaluasi otomatis</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- =======================================================
+       ⭐ MODAL PROMPT ENGINEERING LAB
+  ======================================================== -->
+  <div id="promptLabModal" class="modal hidden">
+    <div class="modal-content elev-2">
+      <button id="closePromptLab" class="icon-btn modal-close">✕</button>
+
+      <h2 class="modal-title">⚗️ Prompt Engineering Lab</h2>
+
+      <p class="muted">Masukkan pertanyaan untuk diuji dengan 4 metode:</p>
+
+      <textarea id="promptLabInput" class="textarea" rows="3"
+        placeholder="Contoh: Jelaskan apa itu machine learning"></textarea>
+
+      <button id="runPromptLab" class="btn btn-primary w-full" style="margin-top:10px;">
+        ▶️ Jalankan Eksperimen
+      </button>
+
+      <hr class="divider" style="margin:15px 0;" />
+
+      <div id="promptLabResults" style="max-height:300px;overflow-y:auto;">
+        <!-- Hasil eksperimen akan dirender lewat script.js -->
+      </div>
+    </div>
+  </div>
+
+  <!-- =======================================================
+       SR-ONLY + helpers
+  ======================================================== -->
+  <style>
+    .sr-only{position:absolute;width:1px;height:1px;margin:-1px;border:0;padding:0;white-space:nowrap;clip-path:inset(100%);clip:rect(0 0 0 0);overflow:hidden}
+    .fade-in{opacity:0;transform:translateY(4px);animation:fadeIn .28s ease-out forwards}
+    @keyframes fadeIn{to{opacity:1;transform:none}}
+  </style>
+
+  <!-- =======================================================
+       MAIN SCRIPT
+  ======================================================== -->
+  <script src="/static/script.js" defer></script>
 </body>
 </html>
