@@ -35,12 +35,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const usiaInput = document.getElementById("usia");
   const downloadTxt = document.getElementById("downloadTxt");
   const downloadJson = document.getElementById("downloadJson");
+  const followupSection = document.getElementById("followupSection");
+  const followupText = document.getElementById("followupText");
 
   // ================================================================
   // 3. VARIABEL STATE
   // ================================================================
   let correctAnswer = "";
   let currentStyle = "";
+  let wrongAttempts = 0;
 
   // ================================================================
   // 4. FUNGSI UTILITY
@@ -107,6 +110,17 @@ document.addEventListener("DOMContentLoaded", () => {
     return `(usia ${age}) ${msg}`;
   };
 
+  const renderFollowupQuestion = (text) => {
+    if (!followupSection || !followupText) return;
+    if (text) {
+      followupText.innerHTML = renderMarkdown(text);
+      followupSection.style.display = "block";
+    } else {
+      followupText.innerHTML = "";
+      followupSection.style.display = "none";
+    }
+  };
+
   // ================================================================
   // 5. EVENT: KIRIM PERTANYAAN KE BACKEND
   // ================================================================
@@ -124,6 +138,7 @@ document.addEventListener("DOMContentLoaded", () => {
     appendBubble("user", `<b>Kamu:</b> ${escapeHtml(message)}`);
     const loading = appendBubble("status", "<i>Memproses jawaban...</i>");
     setBusy(sendBtn, true);
+    renderFollowupQuestion("");
 
     try {
       const response = await fetch("/chat", {
@@ -153,6 +168,17 @@ document.addEventListener("DOMContentLoaded", () => {
           data.style_compare
         )}):</b><br>${renderMarkdown(data.reply_compare)}`
       );
+
+      // Pertanyaan lanjutan ditampilkan di panel terpisah agar tidak tercampur dengan bubble jawaban
+      renderFollowupQuestion(data.followup_question);
+
+      // Pertanyaan lanjutan (agar bot selalu mengajak diskusi setelah menjawab)
+      if (data.followup_question) {
+        appendBubble(
+          "followup",
+          `<b>Pertanyaan Lanjutan:</b> ${renderMarkdown(data.followup_question)}`
+        );
+      }
 
       // Simpan jawaban benar untuk evaluasi
       correctAnswer = data.reply_main;
@@ -187,7 +213,11 @@ document.addEventListener("DOMContentLoaded", () => {
       const response = await fetch("/evaluate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ answer, correct_answer: correctAnswer }),
+        body: JSON.stringify({
+          answer,
+          correct_answer: correctAnswer,
+          wrong_count: wrongAttempts,
+        }),
       });
 
       const data = await response.json();
