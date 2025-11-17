@@ -181,22 +181,27 @@ def chat_endpoint(req: ChatRequest):
             f"{req.message}\n\n"
             f"Berikan penjelasan yang menekankan pemahaman konsep, logika, dan langkah berpikir "
             f"sesuai gaya '{style_main}'. Gunakan bahasa Indonesia yang mudah dipahami."
+            f"JANGAN pernah memberikan jawaban akhir atau kode final secara eksplisit. Bimbing siswa "
+            f"agar dapat menemukan jawabannya sendiri dengan uraian konseptual dan contoh berpikir."
         )
         prompt_compare = (
             f"Buat versi penjelasan lain untuk pertanyaan logika/kode di atas "
             f"dengan gaya belajar '{style_compare}'. Fokus pada pola pikir komputasional."
+            f"HINDARI memberikan jawaban langsung. Tekankan langkah penalaran agar siswa memahami pertanyaan mereka sendiri."
         )
     else:
         prompt_main = (
             f"Kamu adalah tutor dengan gaya belajar '{style_main}'. "
             f"Berikan penjelasan mudah dipahami, terstruktur, dan ringkas untuk pertanyaan berikut:\n\n"
             f"{req.message}\n\n"
-            f"Tulis dalam gaya belajar '{style_main}'."
+            f"Tulis dalam gaya belajar '{style_main}' dan pastikan kamu tidak memberikan jawaban final secara langsung. "
+            f"Fokuslah pada pemahaman konsep, ilustrasi, serta ajakan agar siswa menyimpulkan sendiri."
         )
         prompt_compare = (
             f"Buat versi jawaban lain dengan gaya '{style_compare}' untuk perbandingan dengan gaya '{style_main}'. "
             f"Pertanyaannya sama:\n\n{req.message}\n\n"
-            f"Tulis dengan bahasa Indonesia sesuai gaya '{style_compare}'."
+            f"Tulis dengan bahasa Indonesia sesuai gaya '{style_compare}' dan JANGAN membocorkan jawaban final; "
+            f"beri arahan agar siswa dapat memahami pertanyaannya sendiri."
         )
 
     # Kirim ke model
