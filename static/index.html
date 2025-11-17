@@ -1,186 +1,157 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <meta name="theme-color" content="#0b1220" />
-  <title>CSIPBLLM Personalized Learning System</title>
+  <!-- ============================================================
+       METADATA DASAR
+       - Charset UTF-8 agar karakter Indonesia tampil benar
+       - Viewport untuk tampilan responsif di mobile
+       ============================================================ -->
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 
-  <!-- Anti-cache -->
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
+  <!-- ============================================================
+       JUDUL HALAMAN
+       ============================================================ -->
+  <title>CSIPBLLM — Personalized Learning System</title>
 
-  <link rel="manifest" href="/static/manifest.json" />
-  <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/2983/2983798.png" />
-  <link rel="stylesheet" href="/static/style.css" />
+  <!-- ============================================================
+       CSS
+       PENTING: gunakan path absolut /static/ agar FastAPI bisa serve
+       ============================================================ -->
+  <link rel="stylesheet" href="/static/style.css"/>
 </head>
+<body>
+  <!-- ============================================================
+       WRAPPER / CONTAINER UTAMA
+       ============================================================ -->
+  <div class="container">
 
-<body class="dark">
-  <!-- =======================================================
-       HEADER
-  ======================================================== -->
-  <header id="mainHeader" class="elev-1">
-    <div class="header-left">
-      <button id="sidebarToggle" class="icon-btn" aria-label="Buka/teutup dashboard">☰</button>
-      <div class="branding">
-        <h1 class="app-title">CSIPBLLM Personalized Learning System</h1>
-        <p class="subtitle">Ditenagai Ollama DeepSeek-R1:8b — Pembelajaran adaptif</p>
-      </div>
-    </div>
+    <!-- ==========================================================
+         HEADER / TITLE
+         ========================================================== -->
+    <h1>Personalized Learning System</h1>
+    <p class="subtitle">Ditenagai oleh <b>Ollama GPT-OSS</b></p>
 
-    <div class="header-right">
-      <button id="themeToggle" class="icon-btn" title="Ganti Tema">🌙</button>
-      <select id="modelSelector" class="select hidden"></select>
-    </div>
-  </header>
+    <!-- ==========================================================
+         PROFIL PENGGUNA
+         - Disimpan untuk konteks (profesi & usia)
+         - Tidak mengubah struktur, ID tetap sama (profesi, usia)
+         ========================================================== -->
+    <section class="profile-section">
+      <h3>Profil Pengguna</h3>
+      <p>Informasi ini membantu sistem menyesuaikan gaya penjelasan sesuai karakter kamu.</p>
 
-  <!-- =======================================================
-       LAYOUT WRAPPER
-  ======================================================== -->
-  <div id="layout" class="layout">
+      <!-- input profesi -->
+      <input
+        type="text"
+        id="profesi"
+        placeholder="Profesi kamu (contoh: Siswa, Guru, Mahasiswa...)"
+        autocomplete="on"
+      />
 
-    <!-- =====================================================
-         SIDEBAR
-    ====================================================== -->
-    <aside id="sidebar" class="sidebar hidden">
-      <div class="sb-inner">
+      <!-- input usia -->
+      <input
+        type="number"
+        id="usia"
+        placeholder="Usia kamu"
+        min="5"
+        max="110"
+        inputmode="numeric"
+      />
+    </section>
 
-        <div class="sb-section">
-          <h2 class="sb-title">📊 Dashboard</h2>
+    <!-- ==========================================================
+         PERTANYAAN / MATERI
+         - ID dan urutan tombol dipertahankan
+         - Dropdown TANPA 'netral' (hanya 3 tipe)
+         ========================================================== -->
+    <section class="question-section">
+      <h3>Pertanyaan / Materi</h3>
 
-          <div class="sb-actions">
-            <button id="recommendBtn" class="btn btn-primary w-full">📘 Rekomendasi Belajar</button>
-            <button id="clearBtn" class="btn btn-danger w-full">🗑️ Hapus Chat</button>
+      <!-- textarea pertanyaan -->
+      <textarea
+        id="question"
+        placeholder="Tulis pertanyaan atau topik yang ingin kamu pelajari..."
+        rows="4"
+      ></textarea>
 
-            <!-- ⭐ Prompt Engineering Lab -->
-            <button id="promptLabBtn" class="btn btn-primary w-full">
-              ⚗️ Prompt Engineering Lab
-            </button>
-            <!-- ⭐ End -->
-          </div>
-        </div>
-
-        <hr class="divider" />
-
-        <div class="sb-section">
-          <h3 class="sb-subtitle">🕓 Riwayat Chat</h3>
-          <ul id="historyList" class="history-list"></ul>
-        </div>
-
-        <footer class="sb-footer">
-          <small>Frontend 1.0 — Backend CSIPBLLM Ultra 5.2.0</small>
-        </footer>
-      </div>
-    </aside>
-
-    <!-- =====================================================
-         MAIN CHAT
-    ====================================================== -->
-    <main id="main" class="main">
-      <section id="chatShell" class="chat-shell elev-1">
-
-        <div id="chatBox" class="chat-box"></div>
-
-        <div id="typingIndicator" class="typing-indicator" aria-hidden="true">
-          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-          <span class="ti-text">Bot sedang mengetik…</span>
-        </div>
-
-      </section>
-    </main>
-  </div>
-
-  <!-- =======================================================
-       COMPOSER
-  ======================================================== -->
-  <section id="composer" class="composer elev-1">
-    <div class="composer-row meta">
-      <input id="profession" class="input" type="text" placeholder="Profesi (opsional)" />
-      <input id="age" class="input" type="number" placeholder="Usia (opsional)" />
-      <select id="style" class="select">
-        <option value="Visual">Visual</option>
-        <option value="Auditori">Auditori</option>
-        <option value="Kinestetik">Kinestetik</option>
+      <!-- pilihan gaya belajar (netral DIHAPUS) -->
+      <label for="style">Pilih Gaya Belajar:</label>
+      <select id="style">
+        <option value="visual" selected>Visual</option>
+        <option value="auditori">Auditori</option>
+        <option value="kinestetik">Kinestetik</option>
       </select>
-    </div>
 
-    <div class="composer-row input-row">
-      <textarea id="question" class="textarea" placeholder="Tulis pertanyaanmu…" rows="2"></textarea>
-      <button id="sendBtn" class="btn btn-primary btn-send">Kirim</button>
-    </div>
-  </section>
+      <!-- tombol kirim pertanyaan (ID dipertahankan) -->
+      <button id="sendBtn" title="Kirim ke bot">Kirim Pertanyaan</button>
+    </section>
 
-  <!-- =======================================================
-       FOOTER
-  ======================================================== -->
-  <footer id="footer" class="footer">
-    <p>© 2025 CSIPBLLM Adaptive Learning</p>
-    <p class="muted">DeepSeek-R1:8b via Ollama — Sistem Pembelajaran Adaptif</p>
-  </footer>
+    <!-- ==========================================================
+         PERCAKAPAN
+         - Chat log tampil berurutan (user → bot → compare)
+         - Bubble “loading” akan dihapus saat jawaban selesai
+         ========================================================== -->
+    <section class="chat-section">
+      <h3>Percakapan</h3>
 
-  <!-- =======================================================
-       LOADING OVERLAY
-  ======================================================== -->
-  <div id="loadingOverlay" class="overlay hidden">
-    <div class="loader"></div>
-    <p>Memproses permintaanmu…</p>
-  </div>
-
-  <!-- =======================================================
-       MODAL ABOUT
-  ======================================================== -->
-  <div id="aboutModal" class="modal hidden">
-    <div class="modal-content elev-2">
-      <button id="closeAbout" class="icon-btn modal-close">✕</button>
-      <h2 class="modal-title">Tentang CSIPBLLM</h2>
-      <p>Sistem pembelajaran adaptif berbasis gaya belajar.</p>
-      <ul class="modal-list">
-        <li>Penjelasan adaptif</li>
-        <li>Dual-cognitive output</li>
-        <li>Evaluasi otomatis</li>
-      </ul>
-    </div>
-  </div>
-
-  <!-- =======================================================
-       ⭐ MODAL PROMPT ENGINEERING LAB
-  ======================================================== -->
-  <div id="promptLabModal" class="modal hidden">
-    <div class="modal-content elev-2">
-      <button id="closePromptLab" class="icon-btn modal-close">✕</button>
-
-      <h2 class="modal-title">⚗️ Prompt Engineering Lab</h2>
-
-      <p class="muted">Masukkan pertanyaan untuk diuji dengan 4 metode:</p>
-
-      <textarea id="promptLabInput" class="textarea" rows="3"
-        placeholder="Contoh: Jelaskan apa itu machine learning"></textarea>
-
-      <button id="runPromptLab" class="btn btn-primary w-full" style="margin-top:10px;">
-        ▶️ Jalankan Eksperimen
-      </button>
-
-      <hr class="divider" style="margin:15px 0;" />
-
-      <div id="promptLabResults" style="max-height:300px;overflow-y:auto;">
-        <!-- Hasil eksperimen akan dirender lewat script.js -->
+      <!-- chatBox: placeholder awal akan tergantikan oleh bubble -->
+      <div id="chatBox" aria-live="polite">
+        <p class="placeholder">
+          Belum ada percakapan. Tulis pertanyaan di atas dan klik <b>Kirim</b>.
+        </p>
       </div>
-    </div>
+    </section>
+
+    <!-- ==========================================================
+         JAWABAN SISWA
+         - Hanya tampil SETELAH bot menjawab
+         - ID & struktur dipertahankan
+         ========================================================== -->
+    <section class="answer-section" id="answerSection" style="display:none;">
+      <h3>Jawaban Kamu</h3>
+      <p>Setelah membaca penjelasan dari bot, tulis jawabanmu di bawah untuk dinilai.</p>
+
+      <textarea
+        id="userAnswer"
+        placeholder="Tulis jawaban kamu di sini..."
+        rows="3"
+      ></textarea>
+
+      <!-- tombol kirim jawaban untuk evaluasi -->
+      <button id="evalBtn" title="Kirim jawaban untuk dinilai">Kirim Jawaban</button>
+
+      <!-- hasil evaluasi (warna hijau/merah via CSS class) -->
+      <div id="evalResult" class="eval-result"></div>
+    </section>
+
+    <!-- ==========================================================
+         RIWAYAT
+         - TOMBOL DOWNLOAD BARU MUNCUL JIKA JAWABAN BENAR ✅
+         - ID dipertahankan (historySection, downloadTxt, downloadJson)
+         ========================================================== -->
+    <section class="history-section" id="historySection" style="display:none;">
+      <h3>Unduh Riwayat Percakapan</h3>
+      <p class="note">Tombol akan muncul setelah jawaban kamu dinilai <b>Benar</b>.</p>
+
+      <div id="historyButtons" style="display:none;">
+        <button id="downloadTxt" title="Unduh sebagai .txt">Download TXT</button>
+        <button id="downloadJson" title="Unduh sebagai .json">Download JSON</button>
+      </div>
+    </section>
+
+    <!-- ==========================================================
+         FOOTER
+         ========================================================== -->
+    <footer>
+      © 2025 CSIPBLLM Personalized Learning — Powered by Ollama GPT-OSS
+    </footer>
   </div>
 
-  <!-- =======================================================
-       SR-ONLY + helpers
-  ======================================================== -->
-  <style>
-    .sr-only{position:absolute;width:1px;height:1px;margin:-1px;border:0;padding:0;white-space:nowrap;clip-path:inset(100%);clip:rect(0 0 0 0);overflow:hidden}
-    .fade-in{opacity:0;transform:translateY(4px);animation:fadeIn .28s ease-out forwards}
-    @keyframes fadeIn{to{opacity:1;transform:none}}
-  </style>
-
-  <!-- =======================================================
-       MAIN SCRIPT
-  ======================================================== -->
-  <script src="/static/script.js" defer></script>
+  <!-- ============================================================
+       JAVASCRIPT
+       PENTING: gunakan /static/script.js (bukan relatif)
+       ============================================================ -->
+  <script src="/static/script.js"></script>
 </body>
 </html>
