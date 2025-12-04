@@ -1,6 +1,13 @@
-/* CSIPBLLM — Frontend Script */
+/* ================================================================
+   CSIPBLLM — Frontend Script
+   Sinkron dengan FastAPI (ollamaapi.py) versi kognitif PAR/TAR + CQ
+   Tanpa PHP / Auth, tapi fitur tetap lengkap (chat + eval + history)
+   ================================================================ */
 
 document.addEventListener("DOMContentLoaded", () => {
+  // ===========================================================
+  // 1. Load marked.js untuk render markdown di chat
+  // ===========================================================
   const loadMarked = () =>
     new Promise((resolve, reject) => {
       if (window.marked) {
@@ -16,6 +23,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   loadMarked().catch((err) => console.error("marked.js error:", err));
 
+  // ===========================================================
+  // 2. Ambil elemen DOM
+  // ===========================================================
   const sendBtn = document.getElementById("sendBtn");
   const evalBtn = document.getElementById("evalBtn");
   const chatBox = document.getElementById("chatBox");
@@ -35,10 +45,17 @@ document.addEventListener("DOMContentLoaded", () => {
   const followupText = document.getElementById("followupText");
   const followupStage = document.getElementById("followupStage");
   const historyButtons = document.getElementById("historyButtons");
-   
+  const modeSelect = document.getElementById("mode");
+
+  // ===========================================================
+  // 3. State global
+  // ===========================================================
   let correctAnswer = "";   // jawaban referensi dari bot
   let wrongAttempts = 0;    // jumlah salah untuk evaluasi adaptif
 
+  // ===========================================================
+  // 4. Utilitas umum
+  // ===========================================================
   const escapeHtml = (text) =>
     (text || "")
       .replace(/&/g, "&amp;")
@@ -59,10 +76,14 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const appendBubble = (role, html) => {
-    if (!chatBox) return;
+    if (!chatBox) return null;
+    const placeholder = chatBox.querySelector(".placeholder");
+    if (placeholder) {
+      placeholder.remove();
+    }
+
     const div = document.createElement("div");
-    // sinkron dengan CSS: .chat-bubble.user/.bot/.compare/.status
-    div.className = `chat-bubble ${role}`;
+    div.className = `bubble bubble-${role}`;
     div.innerHTML = html;
     chatBox.appendChild(div);
     chatBox.scrollTop = chatBox.scrollHeight;
@@ -107,14 +128,18 @@ document.addEventListener("DOMContentLoaded", () => {
     followupText.textContent = followup.text;
   };
 
+  // ===========================================================
+  // 5. Fungsi kirim pertanyaan ke /chat (FastAPI, PAR/TAR + CQ)
+  // ===========================================================
   const sendQuestion = async () => {
     const message = getTrimmedValue(questionInput);
-    const cognitive = getRawValue(cognitiveSelect, "par"); // "par" / "tar"
-    const cq1 = getRawValue(cq1Select, "t");               // "p" / "t" / "a"
-    const cq2 = getRawValue(cq2Select, "a");               // "p" / "t" / "a"
+    const cognitive = getRawValue(cognitiveSelect, "par");
+    const cq1 = getRawValue(cq1Select, "t");
+    const cq2 = getRawValue(cq2Select, "a");
+    const mode = getRawValue(modeSelect, "accurate"); // 🔹 BARU
     const profesi = getTrimmedValue(profesiInput);
     const usia = getTrimmedValue(usiaInput);
-
+    
     if (!message) {
       alert("Tulis pertanyaan terlebih dahulu!");
       return;
@@ -136,6 +161,7 @@ document.addEventListener("DOMContentLoaded", () => {
           cognitive, // dikonsumsi oleh backend kognitif
           cq1,
           cq2,
+          mode,
           // session_id bisa ditambah kalau mau multi-user
         }),
       });
@@ -147,9 +173,13 @@ document.addEventListener("DOMContentLoaded", () => {
       // cognitive_main, cq1_main, cq2_main, cognitive_compare, cq1_compare, cq2_compare
       const mainHeader = `GPT-OSS (${data.cognitive_main} | CQ: ${data.cq1_main}, ${data.cq2_main})`;
       const compareHeader = `Perbandingan (${data.cognitive_compare} | CQ: ${data.cq1_compare}, ${data.cq2_compare})`;
+      const ragInfo = data.use_rag
+        ? `RAG ${data.rag_mode || "simple"}`
+        : "RAG tidak digunakan (jawaban dari pengetahuan model)";
 
       appendBubble(
         "bot",
+        `<div class ="rag-meta">${escapeHtml(ragInfo)}</div>`
         `<b>${escapeHtml(mainHeader)}:</b><br>${renderMarkdown(
           data.reply_main || ""
         )}`
