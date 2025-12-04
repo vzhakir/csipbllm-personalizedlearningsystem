@@ -75,13 +75,46 @@
         rows="4"
       ></textarea>
 
-      <!-- pilihan gaya belajar (netral DIHAPUS) -->
-      <label for="style">Pilih Gaya Belajar:</label>
-      <select id="style">
-        <option value="visual" selected>Visual</option>
-        <option value="auditori">Auditori</option>
-        <option value="kinestetik">Kinestetik</option>
-      </select>
+      <!-- pilihan tipe kognitif & CQ -->
+      <div class="cognitive-wrapper">
+        <div class="cognitive-field">
+          <label for="cognitive">Tipe Kognitif:</label>
+          <select id="cognitive">
+            <option value="par" selected>PAR — Practical-Analytical</option>
+            <option value="tar">TAR — Theoretical-Analytical</option>
+          </select>
+        </div>
+
+        <div class="cognitive-field">
+          <label for="cq1">CQ1:</label>
+          <select id="cq1">
+            <option value="t" selected>T — Teoretis / Thinking</option>
+            <option value="a">A — Analitis / Abstract</option>
+            <option value="p">P — Praktis / Project</option>
+            <option value="none">NONE</option>
+          </select>
+        </div>
+
+        <div class="cognitive-field">
+          <label for="cq2">CQ2:</label>
+          <select id="cq2">
+            <option value="a" selected>A — Analitis / Abstract</option>
+            <option value="t">T — Teoretis / Thinking</option>
+            <option value="p">P — Praktis / Project</option>
+            <option value="none">NONE</option>
+          </select>
+        </div>
+
+        <!-- 🔹 BARU: pilih mode backend (fast vs accurate/CRAG) -->
+        <div class="cognitive-field">
+          <label for="mode">Mode Jawaban:</label>
+          <select id="mode">
+            <option value="fast">Cepat — lebih ringan</option>
+            <option value="accurate" selected>Teliti — CRAG aktif</option>
+          </select>
+        </div>
+      </div>
+      <p class="note">Gunakan kombinasi Cognitive + CQ1 + CQ2 dari matriks kebutuhanmu.</p>
 
       <!-- tombol kirim pertanyaan (ID dipertahankan) -->
       <button id="sendBtn" title="Kirim ke bot">Kirim Pertanyaan</button>
@@ -109,6 +142,7 @@
     <section class="followup-section" id="followupSection" style="display:none;">
       <h3>Pertanyaan Lanjutan</h3>
       <div class="followup-card" id="followupCard">
+        <p id="followupStage" class="followup-meta" style="display:none;"></p>
         <p id="followupText"></p>
       </div>
     </section>
