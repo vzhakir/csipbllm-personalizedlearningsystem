@@ -1,27 +1,21 @@
-/* =====================================================================
-   CSIPBLLM — Personalized Learning Frontend Script (FULL VERBOSE)
-   ---------------------------------------------------------------------
-   Fitur:
-   - Kirim pertanyaan ke backend (ollamaapi.py)
-   - Mendapatkan jawaban dengan gaya belajar
-   - Render hasil chat dalam format Markdown (via marked.js)
-   - Evaluasi jawaban siswa
-   - Unduh riwayat percakapan (txt/json)
-   - Semua fungsi disertai komentar dan keamanan XSS
-   ===================================================================== */
+/* CSIPBLLM — Frontend Script */
 
 document.addEventListener("DOMContentLoaded", () => {
-  // ================================================================
-  // 1. LOAD LIBRARY MARKED.JS UNTUK PARSING MARKDOWN
-  // ================================================================
-  const script = document.createElement("script");
-  script.src = "https://cdn.jsdelivr.net/npm/marked/marked.min.js";
-  script.defer = true;
-  document.head.appendChild(script);
+  const loadMarked = () =>
+    new Promise((resolve, reject) => {
+      if (window.marked) {
+        resolve(window.marked);
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = "https://cdn.jsdelivr.net/npm/marked/marked.min.js";
+      script.onload = () => resolve(window.marked);
+      script.onerror = () => reject(new Error("Gagal memuat marked.js"));
+      document.head.appendChild(script);
+    });
 
-  // ================================================================
-  // 2. DEKLARASI ELEMEN DOM YANG DIGUNAKAN
-  // ================================================================
+  loadMarked().catch((err) => console.error("marked.js error:", err));
+
   const sendBtn = document.getElementById("sendBtn");
   const evalBtn = document.getElementById("evalBtn");
   const chatBox = document.getElementById("chatBox");
@@ -30,66 +24,56 @@ document.addEventListener("DOMContentLoaded", () => {
   const answerSection = document.getElementById("answerSection");
   const historySection = document.getElementById("historySection");
   const questionInput = document.getElementById("question");
-  const styleSelect = document.getElementById("style");
+  const cognitiveSelect = document.getElementById("cognitive");
+  const cq1Select = document.getElementById("cq1");
+  const cq2Select = document.getElementById("cq2");
   const profesiInput = document.getElementById("profesi");
   const usiaInput = document.getElementById("usia");
   const downloadTxt = document.getElementById("downloadTxt");
   const downloadJson = document.getElementById("downloadJson");
   const followupSection = document.getElementById("followupSection");
   const followupText = document.getElementById("followupText");
+  const followupStage = document.getElementById("followupStage");
+  const historyButtons = document.getElementById("historyButtons");
+   
+  let correctAnswer = "";   // jawaban referensi dari bot
+  let wrongAttempts = 0;    // jumlah salah untuk evaluasi adaptif
 
-  // ================================================================
-  // 3. VARIABEL STATE
-  // ================================================================
-  let correctAnswer = "";
-  let currentStyle = "";
-  let wrongAttempts = 0;
-
-  // ================================================================
-  // 4. FUNGSI UTILITY
-  // ================================================================
-
-  // Escape HTML untuk keamanan dari XSS
-  const escapeHtml = (text) => {
-    return String(text)
+  const escapeHtml = (text) =>
+    (text || "")
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
+      .replace(/>/g, "&gt;");
+
+  const renderMarkdown = (md) => {
+    if (!window.marked) return escapeHtml(md);
+    return window.marked.parse(md || "");
   };
 
-  // Render teks dengan Markdown formatting
-  const renderMarkdown = (text) => {
-    if (window.marked) {
-      return marked.parse(text, {
-        breaks: true,
-        gfm: true,
-      });
-    }
-    // fallback kalau marked belum loaded
-    return escapeHtml(text).replace(/\n/g, "<br>");
+  const getTrimmedValue = (el) =>
+    el && typeof el.value === "string" ? el.value.trim() : "";
+
+  const getRawValue = (el, fallback = "") => {
+    if (!el) return fallback;
+    return el.value !== "" ? el.value : fallback;
   };
 
-  // Tambah bubble chat baru
-  const appendBubble = (cls, html) => {
-    const placeholder = chatBox.querySelector(".placeholder");
-    if (placeholder) placeholder.remove();
-
+  const appendBubble = (role, html) => {
+    if (!chatBox) return;
     const div = document.createElement("div");
-    div.className = `chat-bubble ${cls}`;
+    // sinkron dengan CSS: .chat-bubble.user/.bot/.compare/.status
+    div.className = `chat-bubble ${role}`;
     div.innerHTML = html;
     chatBox.appendChild(div);
     chatBox.scrollTop = chatBox.scrollHeight;
     return div;
   };
 
-  // Aktifkan / nonaktifkan tombol sementara proses berjalan
-  const setBusy = (button, busy) => {
-    if (button) button.disabled = busy;
+  const setBusy = (btn, busy) => {
+    if (!btn) return;
+    btn.disabled = busy;
   };
 
-  // Fungsi unduh file blob
   const triggerDownload = (blob, filename) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -102,7 +86,6 @@ document.addEventListener("DOMContentLoaded", () => {
     URL.revokeObjectURL(url);
   };
 
-  // Tambah profesi dan usia ke pertanyaan
   const formatMessageWithProfile = (msg, prof, age) => {
     if (!prof && !age) return msg;
     if (prof && age) return `(${prof}, usia ${age}) ${msg}`;
@@ -110,25 +93,27 @@ document.addEventListener("DOMContentLoaded", () => {
     return `(usia ${age}) ${msg}`;
   };
 
-  const renderFollowupQuestion = (text) => {
-    if (!followupSection || !followupText) return;
-    if (text) {
-      followupText.innerHTML = renderMarkdown(text);
-      followupSection.style.display = "block";
-    } else {
-      followupText.innerHTML = "";
+  const renderFollowupQuestion = (followup) => {
+    if (!followupSection || !followupText || !followupStage) return;
+    if (!followup || !followup.text) {
       followupSection.style.display = "none";
+      followupText.textContent = "";
+      followupStage.textContent = "";
+      return;
     }
+    followupSection.style.display = "block";
+    followupStage.style.display = "block";
+    followupStage.textContent = followup.stage || "Pertanyaan lanjutan";
+    followupText.textContent = followup.text;
   };
 
-  // ================================================================
-  // 5. EVENT: KIRIM PERTANYAAN KE BACKEND
-  // ================================================================
-  sendBtn.addEventListener("click", async () => {
-    const message = questionInput.value.trim();
-    const style = styleSelect.value;
-    const profesi = profesiInput.value.trim();
-    const usia = usiaInput.value.trim();
+  const sendQuestion = async () => {
+    const message = getTrimmedValue(questionInput);
+    const cognitive = getRawValue(cognitiveSelect, "par"); // "par" / "tar"
+    const cq1 = getRawValue(cq1Select, "t");               // "p" / "t" / "a"
+    const cq2 = getRawValue(cq2Select, "a");               // "p" / "t" / "a"
+    const profesi = getTrimmedValue(profesiInput);
+    const usia = getTrimmedValue(usiaInput);
 
     if (!message) {
       alert("Tulis pertanyaan terlebih dahulu!");
@@ -138,135 +123,184 @@ document.addEventListener("DOMContentLoaded", () => {
     appendBubble("user", `<b>Kamu:</b> ${escapeHtml(message)}`);
     const loading = appendBubble("status", "<i>Memproses jawaban...</i>");
     setBusy(sendBtn, true);
-    renderFollowupQuestion("");
+    wrongAttempts = 0;
+    renderFollowupQuestion(null);
+    if (historyButtons) historyButtons.style.display = "none";
 
     try {
-      const response = await fetch("/chat", {
+      const res = await fetch("/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: formatMessageWithProfile(message, profesi, usia),
-          style,
+          cognitive, // dikonsumsi oleh backend kognitif
+          cq1,
+          cq2,
+          // session_id bisa ditambah kalau mau multi-user
         }),
       });
 
-      const data = await response.json();
-      loading.remove();
+      const data = await res.json();
+      if (loading) loading.remove();
 
-      // Bubble jawaban utama
+      // Backend kognitif mengirim:
+      // cognitive_main, cq1_main, cq2_main, cognitive_compare, cq1_compare, cq2_compare
+      const mainHeader = `GPT-OSS (${data.cognitive_main} | CQ: ${data.cq1_main}, ${data.cq2_main})`;
+      const compareHeader = `Perbandingan (${data.cognitive_compare} | CQ: ${data.cq1_compare}, ${data.cq2_compare})`;
+
       appendBubble(
         "bot",
-        `<b>GPT-OSS (${escapeHtml(data.style_main)}):</b><br>${renderMarkdown(
-          data.reply_main
+        `<b>${escapeHtml(mainHeader)}:</b><br>${renderMarkdown(
+          data.reply_main || ""
         )}`
       );
 
-      // Bubble perbandingan gaya lain
       appendBubble(
         "compare",
-        `<b>Perbandingan (${escapeHtml(
-          data.style_compare
-        )}):</b><br>${renderMarkdown(data.reply_compare)}`
+        `<b>${escapeHtml(compareHeader)}:</b><br>${renderMarkdown(
+          data.reply_compare || ""
+        )}`
       );
 
-      // Pertanyaan lanjutan ditampilkan di panel terpisah agar tidak tercampur dengan bubble jawaban
-      renderFollowupQuestion(data.followup_question);
+      renderFollowupQuestion({ text: data.followup_question || "" });
 
-      // Pertanyaan lanjutan (agar bot selalu mengajak diskusi setelah menjawab)
-      if (data.followup_question) {
-        appendBubble(
-          "followup",
-          `<b>Pertanyaan Lanjutan:</b> ${renderMarkdown(data.followup_question)}`
-        );
-      }
-
-      // Simpan jawaban benar untuk evaluasi
-      correctAnswer = data.reply_main;
-      currentStyle = data.style_main;
-
-      // Tampilkan area evaluasi & unduhan
-      answerSection.style.display = "block";
-      historySection.style.display = "block";
+      // simpan sebagai "jawaban referensi" untuk /evaluate
+      correctAnswer = data.reply_main || "";
+      if (answerSection) answerSection.style.display = "block";
+      if (historySection) historySection.style.display = "block";
     } catch (err) {
-      loading.remove();
-      appendBubble("bot", `❌ Gagal memproses: ${escapeHtml(String(err))}`);
+      if (loading) loading.remove();
+      appendBubble(
+        "bot",
+        `❌ Gagal memproses: ${escapeHtml(String(err))}`
+      );
     } finally {
       setBusy(sendBtn, false);
     }
-  });
+  };
 
-  // ================================================================
-  // 6. EVENT: EVALUASI JAWABAN SISWA
-  // ================================================================
-  evalBtn.addEventListener("click", async () => {
-    const answer = userAnswer.value.trim();
+  // Tombol kirim & enter di textarea pertanyaan
+  if (sendBtn) {
+    sendBtn.addEventListener("click", sendQuestion);
+  }
+  if (questionInput) {
+    questionInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendQuestion();
+      }
+    });
+  }
+
+  // ===========================================================
+  // 6. Evaluasi jawaban siswa lewat /evaluate
+  // ===========================================================
+  const evaluateAnswer = async () => {
+    const answer = getTrimmedValue(userAnswer);
     if (!answer) {
       alert("Tulis jawabanmu dulu!");
       return;
     }
+    if (!correctAnswer) {
+      alert("Belum ada jawaban referensi dari bot. Kirim pertanyaan dulu.");
+      return;
+    }
 
-    appendBubble("user", `<b>Jawaban Kamu:</b> ${escapeHtml(answer)}`);
-    const scoring = appendBubble("status", "<i>Menilai jawaban kamu...</i>");
     setBusy(evalBtn, true);
+    evalResult.textContent = "Menilai jawaban...";
 
     try {
-      const response = await fetch("/evaluate", {
+      const res = await fetch("/evaluate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           answer,
           correct_answer: correctAnswer,
           wrong_count: wrongAttempts,
+          // session_id kalau mau dihubungkan ke user tertentu
         }),
       });
 
-      const data = await response.json();
-      scoring.remove();
+      const data = await res.json();
+      if (!data.is_correct) wrongAttempts += 1;
 
-      evalResult.className = "eval-result " + (data.is_correct ? "correct" : "incorrect");
-      evalResult.innerHTML = renderMarkdown(data.feedback || "");
+      const statusText = data.is_correct
+        ? "✅ Jawabanmu dianggap BENAR oleh sistem."
+        : "❌ Jawabanmu BELUM tepat.";
 
-      appendBubble(
-        "bot",
-        data.is_correct
-          ? `✅ <b>Benar!</b> ${renderMarkdown(data.feedback)}`
-          : `❌ <b>Salah.</b> ${renderMarkdown(data.feedback)}`
-      );
+      evalResult.classList.remove("correct", "incorrect");
+      if (data.is_correct) {
+        evalResult.classList.add("correct");
+        if (historyButtons) historyButtons.style.display = "block";
+      } else {
+        evalResult.classList.add("incorrect");
+      }
+
+      evalResult.innerHTML = `
+        <p><b>${escapeHtml(statusText)}</b></p>
+        <p><b>Feedback:</b><br>${renderMarkdown(data.feedback || "")}</p>
+        <p><b>Tahap Bantuan:</b> ${escapeHtml(
+          data.hint_level || "Evaluasi awal"
+        )}</p>
+        <p><b>Pertanyaan Lanjutan:</b><br>${escapeHtml(
+          data.followup_question || "-"
+        )}</p>
+      `;
     } catch (err) {
-      scoring.remove();
-      appendBubble("bot", `❌ Error evaluasi: ${escapeHtml(String(err))}`);
+      evalResult.classList.remove("correct", "incorrect");
+      evalResult.textContent = `❌ Gagal evaluasi: ${String(err)}`;
     } finally {
       setBusy(evalBtn, false);
     }
-  });
+  };
 
-  // ================================================================
-  // 7. EVENT: UNDUH RIWAYAT (TXT)
-  // ================================================================
-  downloadTxt.addEventListener("click", async () => {
-    try {
-      const res = await fetch("/history?format=txt");
-      const data = await res.json();
-      const blob = new Blob([data.data || ""], { type: "text/plain" });
-      triggerDownload(blob, "history.txt");
-    } catch (err) {
-      appendBubble("bot", `❌ Gagal mengunduh TXT: ${escapeHtml(String(err))}`);
-    }
-  });
+  if (evalBtn) {
+    evalBtn.addEventListener("click", evaluateAnswer);
+  }
+  if (userAnswer) {
+    userAnswer.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+        // Ctrl+Enter untuk cepat submit evaluasi
+        e.preventDefault();
+        evaluateAnswer();
+      }
+    });
+  }
 
-  // ================================================================
-  // 8. EVENT: UNDUH RIWAYAT (JSON)
-  // ================================================================
-  downloadJson.addEventListener("click", async () => {
-    try {
-      const res = await fetch("/history?format=json");
-      const data = await res.json();
-      const blob = new Blob([JSON.stringify(data, null, 2)], {
-        type: "application/json",
-      });
-      triggerDownload(blob, "history.json");
-    } catch (err) {
-      appendBubble("bot", `❌ Gagal mengunduh JSON: ${escapeHtml(String(err))}`);
-    }
-  });
+  // ===========================================================
+  // 7. Download history dari FastAPI (/history)
+  // ===========================================================
+  if (downloadTxt) {
+    downloadTxt.addEventListener("click", async () => {
+      try {
+        const res = await fetch("/history?format=txt");
+        const data = await res.json();
+        const blob = new Blob([data.data || ""], { type: "text/plain" });
+        triggerDownload(blob, "history.txt");
+      } catch (err) {
+        appendBubble(
+          "bot",
+          `❌ Gagal mengunduh TXT: ${escapeHtml(String(err))}`
+        );
+      }
+    });
+  }
+
+  if (downloadJson) {
+    downloadJson.addEventListener("click", async () => {
+      try {
+        const res = await fetch("/history?format=json");
+        const data = await res.json();
+        const blob = new Blob([JSON.stringify(data, null, 2)], {
+          type: "application/json",
+        });
+        triggerDownload(blob, "history.json");
+      } catch (err) {
+        appendBubble(
+          "bot",
+          `❌ Gagal mengunduh JSON: ${escapeHtml(String(err))}`
+        );
+      }
+    });
+  }
 });
