@@ -305,3 +305,115 @@ footer {
 .chat-bubble h5 { font-size: 14px; }
 .chat-bubble h6 { font-size: 13px; color: #444; }
 
+/* ========== USER DASHBOARD MODAL ========== */
+
+.user-modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: none;              /* default: hidden */
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.35);
+  z-index: 9999;
+}
+
+.user-modal {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 16px 18px 14px;
+  width: 100%;
+  max-width: 360px;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.25);
+  border: 1px solid #dde3f0;
+}
+
+.user-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.user-modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #1e2a5e;
+}
+.user-modal-close {
+  border: none;
+  background: transparent;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.user-modal-body {
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+
+.user-field {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.user-field .label {
+  font-weight: 600;
+  color: #4b5563;
+}
+.user-field .value {
+  margin-left: 8px;
+  text-align: right;
+  color: #111827;
+}
+
+.user-debug {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.user-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+
+.user-delete-btn {
+  background: #dc2626;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  font-size: 13px;
+}
+.user-delete-btn:hover {
+  background: #b91c1c;
+}
+
+/* Mode Jawaban (fast / accurate) */
+.mode-row {
+  margin: 10px 0 12px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.mode-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #111827;
+  min-width: 110px;
+}
+
+.mode-select {
+  flex: 1;
+  padding: 7px 9px;
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  font-size: 14px;
+}
+.mode-select:focus {
+  outline: none;
+  border-color: #1d4ed8;
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.25);
+}
