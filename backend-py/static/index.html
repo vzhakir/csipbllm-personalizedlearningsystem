@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Personalized Learning System</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="topbar-main">
+      <span id="topbarUsername"></span>
+      <button id="btnUserDashboard" class="logout-btn">Akun</button>
+      <button id="btnLogoutMain" class="logout-btn">Logout</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <h1>Personalized Learning System</h1>
+    <p class="sub-title">Ditenagai oleh <b>Ollama GPT-OSS</b></p>
+
+    <!-- Profil terdeteksi (dari localStorage hasil login) -->
+    <div id="profileSummary" class="profile-summary"></div>
+
+    <!-- Pertanyaan -->
+    <h2>Pertanyaan / Materi</h2>
+    <textarea
+      id="question"
+      placeholder="Tulis pertanyaan atau topik yang ingin kamu pelajari..."
+    ></textarea>
+
+    <!-- MODE JAWABAN: CEPAT / TELITI -->
+    <div class="mode-row">
+      <label for="mode" class="mode-label">Mode Jawaban:</label>
+      <select id="mode" class="mode-select">
+        <option value="fast">Cepat — lebih ringkas, fokus inti</option>
+        <option value="accurate" selected>Teliti — lebih lengkap & hati-hati</option>
+      </select>
+    </div>
+
+    <button id="sendBtn" class="send-btn">Kirim Pertanyaan</button>
+
+    <!-- FOLLOW UP -->
+    <div id="followupSection" style="display:none; margin-top:16px;">
+      <h3>Tindak Lanjut</h3>
+      <div id="followupText"></div>
+      <p id="followupStage"></p>
+    </div>
+
+    <!-- EVALUASI JAWABAN -->
+    <div id="answerSection" style="display:none; margin-top:20px;">
+      <h3>Coba Jawab Pertanyaan</h3>
+      <textarea id="userAnswer" placeholder="Tulis jawabanmu..."></textarea>
+      <button id="evalBtn" class="send-btn">Evaluasi Jawaban</button>
+      <div id="evalResult"></div>
+    </div>
+
+    <!-- RIWAYAT -->
+    <div id="historySection" style="display:none;">
+      <h3>Riwayat Percakapan</h3>
+      <div id="historyButtons">
+        <button id="downloadTxt" class="download-btn">Download TXT</button>
+        <button id="downloadJson" class="download-btn">Download JSON</button>
+      </div>
+    </div>
+
+    <!-- CHAT BOX -->
+    <div id="chatBox" class="chat-box">
+      <div class="placeholder">
+        ✨ Belum ada percakapan. Mulai dengan mengetik pertanyaan.
+      </div>
+    </div>
+  </div>
+
+  <!-- DASHBOARD USER (POPUP) -->
+  <div id="userDashboardOverlay" class="user-modal-overlay">
+    <div class="user-modal">
+      <div class="user-modal-header">
+        <h3>Akun Saya</h3>
+        <button id="btnCloseUserModal" class="user-modal-close">✕</button>
+      </div>
+
+      <div class="user-modal-body">
+        <div class="user-field">
+          <span class="label">Username:</span>
+          <span id="udUsername" class="value"></span>
+        </div>
+        <div class="user-field">
+          <span class="label">Tipe Kognitif:</span>
+          <span id="udCognitive" class="value"></span>
+        </div>
+        <div class="user-field">
+          <span class="label">CQ1:</span>
+          <span id="udCq1" class="value"></span>
+        </div>
+        <div class="user-field">
+          <span class="label">CQ2:</span>
+          <span id="udCq2" class="value"></span>
+        </div>
+        <div class="user-field">
+          <span class="label">Dibuat:</span>
+          <span id="udCreatedAt" class="value"></span>
+        </div>
+        <p id="udDebug" class="user-debug"></p>
+      </div>
+
+      <div class="user-modal-footer">
+        <button id="btnDeleteUser" class="user-delete-btn">Hapus Akun</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/script.js"></script>
+</body>
+</html>
