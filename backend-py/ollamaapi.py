@@ -6,12 +6,14 @@ from typing import List, Dict, Optional, Any, Tuple
 from http import HTTPStatus 
 import os
 import re
+import requests 
+import json 
 
 # Import modular components - Menggunakan Impor Relatif
 from .config import (
     BASE_DIR, STATIC_DIR, MAX_HISTORY_CHARS, 
     cognitive_label, cq_label, opposite_cognitive, balanced_cq_compare, 
-    is_code_like, FEW_SHOT_EXAMPLE
+    is_code_like, PROMPT_EXAMPLES
 )
 from .llm_service import query_ollama, get_ollama_status
 from .rag_service import (
@@ -24,6 +26,13 @@ try:
     from langchain_community.chat_message_histories import ChatMessageHistory
 except ImportError:
     ChatMessageHistory = None  # type: ignore
+
+# ================================================================
+# KONFIGURASI API PHP 
+# ================================================================
+# Pastikan port ini sesuai dengan konfigurasi server Apache/PHP Anda
+PHP_API_BASE = "http://127.0.0.1:8001" 
+PHP_SESSION_ENDPOINT = f"{PHP_API_BASE}/session_management.php" 
 
 # ================================================================
 # FASTAPI SETUP
@@ -67,6 +76,9 @@ class EvalRequest(BaseModel):
     correct_answer: str
     wrong_count: Optional[int] = 0
     session_id: Optional[str] = "default"
+    current_cognitive: Optional[str] = "par" 
+    current_cq1: Optional[str] = "t"
+    current_cq2: Optional[str] = "a"
 
 
 def get_session_history(session_id: str):
@@ -92,9 +104,27 @@ def format_history_as_text(history, max_chars: int = MAX_HISTORY_CHARS) -> str:
         return text
     return "...\n" + text[-max_chars:]
 
+
 # ================================================================
-# UTILITAS METAKOGNISI
+# LOGGING PERSISTEN & UTILITAS ADAPTASI 
 # ================================================================
+
+def log_to_php_backend(data: Dict[str, Any]):
+    """Helper untuk mengirim data ke endpoint PHP session_management.php."""
+    try:
+        response = requests.post(PHP_SESSION_ENDPOINT, json=data, timeout=5) 
+        if response.status_code == HTTPStatus.OK.value:
+            res_data = response.json()
+            if res_data.get("status") == "success":
+                return res_data.get("session_id") or res_data.get("turn_id")
+            else:
+                print(f"[LOG] ⚠️ DB Log Error: {res_data.get('message')}")
+        else:
+            print(f"[LOG] ❌ DB HTTP Error: {response.status_code} - {response.text[:100]}")
+    except requests.exceptions.RequestException as e:
+        print(f"[LOG] ❌ DB Connection Error: {e.__class__.__name__}")
+    return None
+
 def _parse_ollama_sections(text: str, section_name: str, default: str = "") -> str:
     """Helper untuk mengambil konten dari format FEEDBACK: [...] dan FOLLOWUP_QUESTION: [...]"""
     pattern = re.compile(rf"^{re.escape(section_name)}:\s*(.*?)(?:\n---|\n[A-Z_]+:|$)", re.DOTALL | re.MULTILINE)
@@ -125,8 +155,39 @@ def _get_reflection_prompt(user_answer: str, history_text: str, wrong_count: int
     FOLLOWUP_QUESTION: [Satu pertanyaan reflektif tentang proses belajar/perubahan strategi]
     """
 
+def _get_adaptation_prompt(wrong_count: int, user_answer: str, correct_answer: str, current_profile: Dict) -> str:
+    """Menghasilkan prompt untuk LLM menganalisis kinerja dan menyarankan adaptasi profil."""
+    
+    current_cog = current_profile.get('cognitive', 'par')
+    current_cq1 = current_profile.get('cq1', 't')
+    current_cq2 = current_profile.get('cq2', 'a')
+    
+    return f"""
+    SYSTEM: Anda adalah seorang Analis Pembelajaran Adaptif. Tugas Anda adalah menganalisis kegagalan siswa dan menyarankan penyesuaian pada profil kognitif (PAR/TAR dan CQ1/CQ2) untuk memaksimalkan efektivitas scaffolding berikutnya.
+    
+    Kinerja Siswa:
+    - Jumlah total kesalahan berturut-turut pada sesi ini: {wrong_count}
+    - Kunci Konsep yang gagal dicapai: {correct_answer}
+    - Jawaban terakhir siswa: {user_answer}
+    
+    Profil Kognitif Saat Ini:
+    - Kognitif Utama: {current_cog}
+    - CQ1: {current_cq1}, CQ2: {current_cq2}
+    
+    Analisis: Identifikasi apakah masalah ini disebabkan oleh pemahaman konsep yang terlalu Teoretis (TAR) yang kurang contoh Praktis (PAR), atau sebaliknya. Fokus pada CQ (Teoretis/Analitis/Praktis) mana yang harus lebih ditekankan.
+    
+    Aturan Saran:
+    1. HANYA sarankan perubahan jika wrong_count >= 2 DAN Anda melihat pola kegagalan yang jelas.
+    2. JANGAN membuat saran jika profil sudah optimal untuk konteks soal.
+    3. Jika Anda menyarankan perubahan, keluarkan format JSON BERIKUT (tanpa teks lain):
+       {{"suggest_change": true, "message": "Alasan singkat perubahan (maks 1 kalimat)", "new_cognitive": "par|tar", "new_cq1": "p|t|a", "new_cq2": "p|t|a"}}
+    4. Jika TIDAK ada saran perubahan, keluarkan format JSON BERIKUT:
+       {{"suggest_change": false}}
+    """
+
+
 # ================================================================
-# ENDPOINT CHAT (Optimasi: Fokus pada Personalisasi & Gaya Prompting)
+# ENDPOINT CHAT
 # ================================================================
 @router.post("/chat")
 def chat_endpoint(req: ChatRequest):
@@ -142,15 +203,21 @@ def chat_endpoint(req: ChatRequest):
     cq1_compare, cq2_compare = balanced_cq_compare(cq1_main, cq2_main)
     
     cognitive_main_label = cognitive_label(cognitive_main)
+    cognitive_compare_label = cognitive_label(cognitive_compare)
     
     # 2. Prompt Style
     prompt_style = (req.prompt_style or "zero_shot").lower()
     style_injection_prefix = ""
+    
+    # --- LOGIKA PENYUNTIKAN GAYA PROMPT (Zero-Shot, CoT, Few-Shot) ---
     if prompt_style == "cot":
-        # Instruksi CoT lebih ringkas
-        style_injection_prefix = "MULAILAH jawabanmu dengan 'Mari kita pikirkan ini langkah demi langkah.' Tunjukkan penalaran internalmu (langkah berpikir) sebelum memberikan jawaban. "
+        # CoT instruction (tidak menggunakan contoh penuh)langkah.' Tunjukkan penal
+        style_injection_prefix = PROMPT_EXAMPLES + "MULAILAH jawabanmu dengan 'Mari kita pikirkan ini langkah demi aran internalmu (langkah berpikir) sebelum memberikan jawaban. "
     elif prompt_style == "few_shot":
-        style_injection_prefix = FEW_SHOT_EXAMPLE + "\n\nIkuti format penalaran yang sama dengan contoh di atas. "
+        # Few-Shot instruction menggunakan konstanta baru
+        style_injection_prefix = PROMPT_EXAMPLES + "\n\nIkuti format penalaran yang sama dengan contoh di atas. "
+    # Zero-Shot diimplementasikan secara implisit karena style_injection_prefix tetap ""
+    # ----------------------------------------------------------------
 
     # 3. RAG + CRAG-lite
     load_materials_and_build_index() 
@@ -162,8 +229,6 @@ def chat_endpoint(req: ChatRequest):
     code_question = is_code_like(req.message)
 
     # 4. Building Prompts 
-    
-    # Instruksi Kognitif dan RAG disatukan untuk efisiensi prompt
     base_instr = (
         "Gunakan profil ini untuk mengatur gaya penjelasan: "
         "PAR → praktis & banyak contoh konkret; "
@@ -174,7 +239,7 @@ def chat_endpoint(req: ChatRequest):
     
     profile_meta = (
         f"Profil Utama Siswa:\n"
-        f"- Kognitif: {cognitive_label(cognitive_main)}\n"
+        f"- Kognitif: {cognitive_main_label}\n"
         f"- CQ1: {cq_label(cq1_main)}, CQ2: {cq_label(cq2_main)}\n\n"
     )
     
@@ -188,17 +253,21 @@ def chat_endpoint(req: ChatRequest):
         f"Tugasmu: {base_instr}\n"
     )
     if code_question:
-        prompt_main += "Fokus pada konsep dasar dan strategi penyelesaiannya secara bertahap. JANGAN PERNAH MEMBERIKAN KODE/JAWABAN AKHIR SECARA LENGKAP.\n"
+        prompt_main += (
+            "Fokus pada konsep dasar dan strategi penyelesaiannya secara bertahap. "
+            "JANGAN PERNAH MEMBERIKAN KODE/JAWABAN AKHIR SECARA LENGKAP.\n"
+            "Jika relevan, sertakan diagram alir (flowchart) dalam format Mermaid, "
+            "dibungkus dengan tag '```mermaid\\n...\\n```' di akhir jawaban utama Anda.\n" # <-- DUKUNGAN MERMAID
+        )
     else:
         prompt_main += "Fokus pada konsep, kerangka teori, dan analogi yang relevan.\n"
     
     prompt_main += f"Pertanyaan Siswa:\n{req.message}\n"
 
-
-    # Prompt Perbandingan (Tidak perlu CoT/Few-Shot, tetap ringkas)
+    # Prompt Perbandingan
     prompt_compare = (
-        f"Kamu adalah tutor VERSI PERBANDINGAN yang memberikan sudut pandang {cognitive_label(cognitive_compare)}.\n\n"
-        f"Profil Perbandingan:\n- Kognitif: {cognitive_label(cognitive_compare)}\n- CQ1: {cq_label(cq1_compare)}, CQ2: {cq_label(cq2_compare)}\n\n"
+        f"Kamu adalah tutor VERSI PERBANDINGAN yang memberikan sudut pandang {cognitive_compare_label}.\n\n"
+        f"Profil Perbandingan:\n- Kognitif: {cognitive_compare_label}\n- CQ1: {cq_label(cq1_compare)}, CQ2: {cq_label(cq2_compare)}\n\n"
         f"=== KONTEN MATERI TERKAIT (RAG, mode={rag_mode}) ===\n{context_text}\n\n"
         "Buat penjelasan ALTERNATIF, tetap benar, tetapi sesuaikan gaya berpikir dengan profil perbandingan. Jangan hanya mengulang penjelasan utama.\n\n"
         f"Pertanyaan Siswa:\n{req.message}\n"
@@ -208,7 +277,6 @@ def chat_endpoint(req: ChatRequest):
     reply_main, latency_main = query_ollama(prompt_main)
     reply_compare, latency_compare = query_ollama(prompt_compare)
 
-    # Follow-up prompt tetap ringkas
     followup_prompt = (
         f"Kamu adalah tutor interaktif. Buat SATU pertanyaan lanjutan (tepat 1 kalimat) untuk mengajak siswa berpikir lebih dalam berdasarkan penjelasan ini. Hindari memberi jawaban; fokus pada konsep atau aplikasinya.\n\n"
         f"Jawaban penjelasan yang baru saja kamu berikan:\n\n{reply_main}"
@@ -216,18 +284,40 @@ def chat_endpoint(req: ChatRequest):
     followup_question, _ = query_ollama(followup_prompt, retries=1)
     followup_question = followup_question.strip()
 
-    # 6. Update Memory & Log
+    # 6. Update Memory & Log PERSISTEN
     if history is not None:
         history.add_user_message(req.message)
         history.add_ai_message(reply_main)
-
-    conversation_entry = {
-        # ... (logging data) ...
+        
+    # LOGGING PERCAKAPAN KE DB (BARU)
+    log_data = {
+        "action": "log_turn",
+        "session_id": int(session_id),
+        "turn_type": "chat",
         "user_message": req.message,
-        "cognitive_main": cognitive_label(cognitive_main),
+        "reply_main": reply_main,
+        "reply_compare": reply_compare,
+        "followup_question": followup_question,
+        "cognitive_main": cognitive_main_label, 
+        "cq1_main": cq_label(cq1_main),         
+        "cq2_main": cq_label(cq2_main),         
+        "prompt_style_main": prompt_style,
+        "is_correct": None, 
+        "wrong_attempts": 0,
+        "latency_main_s": latency_main,
+        "used_rag": int(used_rag), 
+        "rag_mode": rag_mode,
+    }
+    log_to_php_backend(log_data)
+
+
+    # Versi logging lama (in-memory)
+    conversation_entry = {
+        "user_message": req.message,
+        "cognitive_main": cognitive_main_label,
         "cq1_main": cq_label(cq1_main),
         "cq2_main": cq_label(cq2_main),
-        "cognitive_compare": cognitive_label(cognitive_compare),
+        "cognitive_compare": cognitive_compare_label,
         "cq1_compare": cq_label(cq1_compare),
         "cq2_compare": cq_label(cq2_compare),
         "reply_main": reply_main,
@@ -246,11 +336,10 @@ def chat_endpoint(req: ChatRequest):
     print(f"[CHAT] 💾 Riwayat disimpan (total {len(conversation_history)} percakapan).")
 
     return {
-        # ... (response data) ...
-        "cognitive_main": cognitive_label(cognitive_main),
+        "cognitive_main": cognitive_main_label,
         "cq1_main": cq_label(cq1_main),
         "cq2_main": cq_label(cq2_main),
-        "cognitive_compare": cognitive_label(cognitive_compare),
+        "cognitive_compare": cognitive_compare_label,
         "cq1_compare": cq_label(cq1_compare),
         "cq2_compare": cq_label(cq2_compare),
         "reply_main": reply_main,
@@ -265,7 +354,7 @@ def chat_endpoint(req: ChatRequest):
     }
 
 # ================================================================
-# ENDPOINT EVALUASI (Optimasi: Pedagogi Ketat & Anti-Halusinasi)
+# ENDPOINT EVALUASI
 # ================================================================
 @router.post("/evaluate")
 def evaluate_answer(req: EvalRequest):
@@ -296,7 +385,7 @@ def evaluate_answer(req: EvalRequest):
         context_parts.append(f"[Sumber {i} - {ch['source']}]\n{chunk_text}\n")
     context_text = "\n\n".join(context_parts) if context_parts else "Tidak ada konteks materi relevan ditemukan."
 
-    # 2. LLM Call 1: Evaluasi Jawaban (Prompt Ditingkatkan)
+    # 2. LLM Call 1: Evaluasi Jawaban
     role_desc = "Computational Thinking" if is_code else "adaptif"
     
     # --- PROMPT EVALUASI DENGAN INSTRUKSI KONSISTENSI LLM ---
@@ -325,7 +414,8 @@ def evaluate_answer(req: EvalRequest):
     is_correct_flag = "benar" in feedback.lower() and "salah" not in feedback.lower()
 
     followup_question = ""
-    
+    profile_suggestion: Optional[Dict] = None
+
     # 3. LOGIKA METAKOGNISI / SCAFFOLDING
     if is_correct_flag and wrong_count > 0:
         # Metakognisi (Refleksi Pasca-Koreksi)
@@ -349,6 +439,26 @@ def evaluate_answer(req: EvalRequest):
         )
         followup_question, _ = query_ollama(followup_prompt, retries=1) 
         followup_question = followup_question.strip()
+        
+        # LOGIKA ADAPTASI DINAMIS
+        if wrong_count >= 2:
+            current_profile = {
+                'cognitive': req.current_cognitive,
+                'cq1': req.current_cq1,
+                'cq2': req.current_cq2
+            }
+            
+            adaptation_prompt = _get_adaptation_prompt(
+                wrong_count + 1, answer, req.correct_answer, current_profile
+            )
+            suggestion_resp, _ = query_ollama(adaptation_prompt, retries=1)
+            
+            try:
+                profile_suggestion = json.loads(suggestion_resp)
+            except json.JSONDecodeError:
+                print(f"[ADAPT] ⚠️ Gagal parse saran adaptasi: {suggestion_resp[:50]}")
+                profile_suggestion = {"suggest_change": False}
+
     
     else:
         # Jawaban benar pertama kali (wrong_count == 0)
@@ -356,12 +466,34 @@ def evaluate_answer(req: EvalRequest):
         followup_question = "🎉 Anda langsung berhasil menjawab dengan benar! Materi ini sudah Anda kuasai. Anda bisa melanjutkan ke pertanyaan baru."
 
 
-    # 4. Update Memory
+    # 4. Update Memory & Log PERSISTEN
     if history is not None:
         history.add_user_message(f"[EVALUASI] Jawaban: {req.answer}")
         history.add_ai_message(f"[UMPAN BALIK] {feedback.strip()}")
 
-    return {
+    # LOGGING EVALUASI KE DB (BARU)
+    log_data = {
+        "action": "log_turn",
+        "session_id": int(session_id),
+        "turn_type": "evaluate",
+        "user_message": req.answer, # Jawaban siswa
+        "reply_main": feedback.strip(), # Feedback tutor
+        "reply_compare": "",
+        "followup_question": followup_question,
+        "cognitive_main": "N/A", 
+        "cq1_main": "N/A",
+        "cq2_main": "N/A",
+        "prompt_style_main": "N/A",
+        "is_correct": 1 if is_correct_flag else 0,
+        "wrong_attempts": wrong_count,
+        "latency_main_s": 0.0, 
+        "used_rag": int(bool(rag_chunks)), 
+        "rag_mode": "evaluation", 
+    }
+    log_to_php_backend(log_data)
+    
+    # Payload yang dikirim ke frontend
+    return_payload = {
         "is_correct": is_correct_flag,
         "feedback": feedback.strip(),
         "hint_level": hint_level,
@@ -369,14 +501,18 @@ def evaluate_answer(req: EvalRequest):
         "followup_question": followup_question,
         "used_rag": bool(rag_chunks), 
         "session_id": session_id,
+        "profile_suggestion": profile_suggestion 
     }
+
+    return return_payload
 
 
 # ================================================================
-# ENDPOINT RIWAYAT
+# ENDPOINT RIWAYAT 
 # ================================================================
 @router.get("/history")
 def get_history(format: str = "json"):
+    # ENDPOINT INI HANYA MENGGUNAKAN LOGIC IN-MEMORY LAMA
     if not conversation_history:
         if format == "json":
             return {"history": []}
