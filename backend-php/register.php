@@ -30,6 +30,15 @@ if ($username === "" || $password === "") {
     json_response("error", "Username & password wajib diisi");
 }
 
+// NEW: PASSWORD AND EMAIL VALIDATION
+if (strlen($password) < 6) {
+    json_response("error", "Password minimal 6 karakter");
+}
+if (!empty($email) && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    json_response("error", "Format email tidak valid");
+}
+
+
 // Cek apakah username sudah dipakai
 $check = $conn->prepare("SELECT id FROM users WHERE username = ? LIMIT 1");
 if (!$check) {
