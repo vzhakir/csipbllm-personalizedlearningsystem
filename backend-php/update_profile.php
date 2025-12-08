@@ -25,11 +25,14 @@ $cognitive = strtolower(trim($data["cognitive"] ?? ""));
 $cq1       = strtolower(trim($data["cq1"] ?? ""));
 $cq2       = strtolower(trim($data["cq2"] ?? ""));
 
-if (empty($email) || empty($cognitive) || empty($cq1) || empty($cq2)) {
-    json_response("error", "Semua field profil wajib diisi untuk update");
-}
+// HILANGKAN VALIDASI TERLALU KETAT:
+// Baris ini dihapus: if (empty($email) || empty($cognitive) || empty($cq1) || empty($cq2)) { ... }
+// Karena field seperti email bisa kosong (NULL) dan field kognitif memiliki nilai default.
 
 // Tambahkan validasi email di sini jika perlu
+if (!empty($email) && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    json_response("error", "Format email tidak valid");
+}
 
 $stmt = $conn->prepare("
     UPDATE users SET email = ?, cognitive = ?, cq1 = ?, cq2 = ?
