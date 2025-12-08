@@ -26,7 +26,7 @@ if ($username === "" || $password === "") {
 }
 
 $stmt = $conn->prepare("
-    SELECT id, username, password, cognitive, cq1, cq2
+    SELECT id, username, email, password, cognitive, cq1, cq2
     FROM users
     WHERE username = ?
     LIMIT 1
@@ -64,6 +64,7 @@ $token = bin2hex(random_bytes(32));
 json_response("success", "Login berhasil", [
     "user_id"   => (int)$row["id"],
     "username"  => $row["username"],
+    "email"     => $row["email"] ?? "", // Ditambahkan
     "token"     => $token,
     "cognitive" => $row["cognitive"] ?? "par",
     "cq1"       => $row["cq1"] ?? "t",
