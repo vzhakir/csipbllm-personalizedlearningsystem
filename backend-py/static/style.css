@@ -8,7 +8,7 @@
   --brand-dark: #17214d;
   --brand-light: #cfd8ff;
   --accent-green: #10b981;   /* Correct/Success */
-  --accent-red: #ef4444;     /* Incorrect/Error */
+  --accent-red: #dc2626;     /* Incorrect/Error (Default Red) */
   --accent-yellow: #f59e0b;  /* Compare/Highlight */
   --bg: #f5f7fa;             /* Main background */
   --fg: #222;                /* Foreground text */
@@ -18,6 +18,7 @@
   --bubble-bot: #ffffff;     /* Bot bubble background (clean white) */
   --bubble-compare: #f0f4ff; /* Compare/Hint bubble background */
   --bubble-status: #e5e7eb;  /* Status/Loading background */
+  --delete-all-bg: #993a3a; /* Darker red for 'Delete All Chats' */
 }
 
 /* ---------------- RESET & BODY ---------------- */
@@ -93,9 +94,26 @@ body {
     padding-right: 5px;
     margin-top: 10px;
 }
-.history-item {
-    padding: 8px 10px;
+
+/* CONTAINER WRAPPER: Menampung judul dan tombol hapus/rename */
+.history-item-wrapper {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     margin-bottom: 5px;
+    border-radius: 6px; 
+    transition: background-color 0.1s ease;
+}
+
+/* Efek hover untuk seluruh baris */
+.history-item-wrapper:hover {
+    background-color: #3b457a;
+}
+
+/* Elemen Judul Sesi */
+.history-item {
+    flex-grow: 1; 
+    padding: 8px 10px;
     border-radius: 6px;
     font-size: 14px;
     cursor: pointer;
@@ -105,13 +123,51 @@ body {
     background-color: transparent;
     color: #e0e0e0;
 }
-.history-item:hover {
-    background-color: #3b457a;
-}
+
+/* Pastikan item aktif terlihat menonjol */
 .history-item.active {
     background-color: var(--brand-dark);
     color: white;
     font-weight: 600;
+}
+
+/* Hapus hover di item lama, pindahkan ke wrapper */
+.history-item:hover {
+    background-color: transparent;
+}
+
+
+/* Tombol Aksi di Sidebar (Hapus dan Ganti Nama) */
+.session-action-btn {
+    background: none;
+    border: none;
+    color: #e0e0e0; 
+    font-size: 14px;
+    padding: 8px 5px;
+    /* margin-left: 5px; Dihapus karena flexbox mengatur jarak */
+    cursor: pointer;
+    
+    /* Kontrol Visibilitas */
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease;
+    flex-shrink: 0;
+}
+
+/* Buat tombol aksi muncul saat kursor di atas wrapper */
+.history-item-wrapper:hover .session-action-btn {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Style khusus untuk tombol Hapus */
+.delete-session-btn:hover {
+    color: var(--accent-red);
+}
+
+/* Style khusus untuk tombol Rename */
+.rename-session-btn:hover {
+    color: var(--accent-yellow); 
 }
 
 /* Sidebar Footer (Download) */
@@ -586,10 +642,13 @@ body {
   color: #9ca3af;
 }
 
+/* Modifikasi Footer Modal untuk Tombol Rapi */
 .user-modal-footer {
   display: flex;
   justify-content: flex-end;
   margin-top: 6px;
+  /* Tambahkan gap untuk memisahkan tombol */
+  gap: 8px; 
 }
 
 .user-update-btn {
@@ -600,7 +659,7 @@ body {
     border: none;
     cursor: pointer;
     font-size: 13px;
-    margin-right: 10px; 
+    /* Hilangkan margin-right yang lama karena sudah ada gap */
     margin-top: 0 !important; 
 }
 .user-update-btn:hover {
@@ -608,7 +667,8 @@ body {
 }
 
 .user-delete-btn {
-  background: #dc2626;
+  /* Default red for Hapus Akun */
+  background: var(--accent-red); 
   padding: 8px 12px;
   border-radius: 8px;
   border: none;
@@ -617,6 +677,11 @@ body {
   font-size: 13px;
   margin-top: 0 !important;
 }
+/* Style spesifik untuk tombol Hapus Semua Chat */
+#btnDeleteAllChats {
+    background: var(--delete-all-bg); /* Darker red */
+}
+
 .user-delete-btn:hover {
   background: #b91c1c;
 }
