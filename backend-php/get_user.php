@@ -20,13 +20,13 @@ if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") {
 
 // ====== KONFIG DB ======
 $DB_HOST = "localhost";
-$DB_USER = "admin";
-$DB_PASS = "passwordnyaadmin1234@@";
+$DB_USER = "##############";
+$DB_PASS = "##############";
 $DB_NAME = "llmchatbot";
 
 // ====== KONEKSI DB ======
 $conn = @new mysqli($DB_HOST, $DB_USER, $DB_PASS, $DB_NAME);
-if ($conn->connect_error) {
+if ($conn->connect_error) {    
     error_log("DB connection failed: " . $conn->connect_error);
     http_response_code(500);
 
