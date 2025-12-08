@@ -74,9 +74,31 @@ def balanced_cq_compare(cq1: str, cq2: str) -> Tuple[str, str]:
     return cq_comp1, cq_comp2
 
 # ================================================================
-# FEW-SHOT EXAMPLE
+# PROMPT EXAMPLES (FEW-SHOT, COT, ZERO-SHOT) <--- PERUBAHAN NAMA VARIABEL
 # ================================================================
-FEW_SHOT_EXAMPLE = """
+PROMPT_EXAMPLES = """
+
+=== CONTOH ZERO-SHOT (Gaya Langsung/Ringkas) ===
+Pertanyaan: Apa perbedaan mendasar antara Array dan Linked List?
+Jawaban yang diinginkan: 
+Perbedaan mendasar antara Array dan Linked List terletak pada **alokasi memori** dan **struktur koneksi**.
+* **Array**: Alokasi memori kontigu (berdekatan). Akses elemen cepat (O(1)) berdasarkan indeks. Ukuran seringkali statis.
+* **Linked List**: Alokasi memori tersebar (dinamis), dihubungkan oleh pointer. Akses elemen lambat (O(n)) sekuensial. Modifikasi elemen (insert/delete) cepat (O(1)).
+=== AKHIR CONTOH ZERO-SHOT ===
+
+
+=== CONTOH COT (Chain-of-Thought/Langkah Berpikir) ===
+Pertanyaan: Apa perbedaan mendasar antara Array dan Linked List?
+Jawaban yang diinginkan: 
+Mari kita pikirkan ini langkah demi langkah.
+1. **Identifikasi Kebutuhan Memori:** Pertimbangkan bagaimana Array dan Linked List dialokasikan. Array memerlukan blok memori berurutan (kontigu), sementara Linked List menggunakan memori tersebar yang dihubungkan oleh pointer.
+2. **Analisis Kompleksitas Waktu:** Berpikir secara algoritmik: Bagaimana kompleksitas waktu mempengaruhi pencarian (akses O(1) vs O(n)) dan modifikasi (insert/delete O(n) vs O(1))?
+3. **Kembangkan Jawaban Akhir:** Gunakan poin-poin analisis di atas untuk merumuskan jawaban yang akurat dan terperinci.
+Jawaban Akhir: 
+Perbedaan mendasar antara Array dan Linked List terletak pada **alokasi memori** dan **struktur koneksi**. (lanjutan penjelasan).
+=== AKHIR CONTOH COT ===
+
+
 === CONTOH FEW-SHOT (Gaya TAR/Teoretis) ===
 Pertanyaan: Apa perbedaan mendasar antara Array dan Linked List?
 Jawaban yang diinginkan: 
