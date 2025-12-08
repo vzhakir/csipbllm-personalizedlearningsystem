@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <title>Login — CSIPBLLM</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/static/auth.css" />
+</head>
+<body>
+  <div class="auth-shell">
+    <div class="auth-header">
+      <div class="auth-logo">PL</div>
+      <h1 class="auth-title">Masuk ke Personalized Learning</h1>
+      <p class="auth-subtitle">Gunakan akunmu untuk melanjutkan ke sistem belajar.</p>
+
+      <div class="auth-tabs">
+        <a href="/static/login.html" class="active">Login</a>
+        <a href="/static/register.html">Register</a>
+      </div>
+    </div>
+
+    <div class="auth-body">
+      <div class="auth-field">
+        <label for="loginUsername">Username atau Email</label>
+        <input id="loginUsername" type="text" autocomplete="username" />
+      </div>
+      <div class="auth-field">
+        <label for="loginPassword">Password</label>
+        <input id="loginPassword" type="password" autocomplete="current-password" />
+      </div>
+
+      <div class="auth-actions">
+        <label class="auth-checkbox">
+          <input type="checkbox" id="rememberMe" checked />
+          <span>Ingat saya</span>
+        </label>
+        <span class="auth-muted">Lupa password? (belum diimplementasikan)</span>
+      </div>
+
+      <div id="loginError" class="auth-error"></div>
+
+      <button id="btnLogin" class="auth-btn-main" type="button">
+        Masuk
+      </button>
+
+      <div class="auth-footer">
+        Belum punya akun?
+        <a href="/static/register.html">Daftar sekarang</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ====== KONFIGURASI API PHP ======
+    const PHP_API_BASE = "http://127.0.0.1:8001"; // ganti jika port PHP beda
+
+    // Kalau sudah login (localStorage punya username), langsung lempar ke app utama
+    if (localStorage.getItem("username")) {
+      window.location.href = "/";
+    }
+
+    const loginUsername = document.getElementById("loginUsername");
+    const loginPassword = document.getElementById("loginPassword");
+    const loginError = document.getElementById("loginError");
+    const btnLogin = document.getElementById("btnLogin");
+
+    function setBusy(b) {
+      btnLogin.disabled = b;
+      btnLogin.textContent = b ? "Memproses..." : "Masuk";
+    }
+
+    async function doLogin() {
+      loginError.textContent = "";
+      const username = loginUsername.value.trim();
+      const password = loginPassword.value.trim();
+
+      if (!username || !password) {
+        loginError.textContent = "Username dan password wajib diisi.";
+        return;
+      }
+
+      setBusy(true);
+      try {
+        const res = await fetch(PHP_API_BASE + "/login.php", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password }),
+        });
+        const data = await res.json();
+
+        if (data.status !== "success") {
+          loginError.textContent = data.message || "Login gagal.";
+          return;
+        }
+
+        // 🔴 SIMPAN user_id JUGA
+        if (data.user_id)  localStorage.setItem("user_id", data.user_id);
+        if (data.username) localStorage.setItem("username", data.username);
+        if (data.cognitive) localStorage.setItem("cognitive", data.cognitive);
+        if (data.cq1)      localStorage.setItem("cq1", data.cq1);
+        if (data.cq2)      localStorage.setItem("cq2", data.cq2);
+
+        window.location.href = "/";
+
+      } catch (err) {
+        console.error(err);
+        loginError.textContent = "Tidak bisa terhubung ke server login.";
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    btnLogin.addEventListener("click", doLogin);
+    loginPassword.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        doLogin();
+      }
+    });
+  </script>
+</body>
+</html>
