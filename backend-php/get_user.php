@@ -1,52 +1,47 @@
 <?php
-// backend-php/config.php
+// backend-php/get_user.php
+require_once "config.php";
 
-declare(strict_types=1);
+// Bisa ambil dari GET atau body JSON
+$user_id = 0;
 
-// ====== MODE DEBUG (true = tampilkan info tambahan di JSON & error_log) ======
-define("DEBUG_MODE", true);
-
-// ====== HEADER UMUM (JSON + CORS) ======
-header("Content-Type: application/json; charset=utf-8");
-header("Access-Control-Allow-Origin: http://127.0.0.1:8000"); // ganti jika perlu
-header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type, Authorization");
-
-// Preflight CORS (OPTIONS) → cukup balik 204 kosong
-if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") {
-    http_response_code(204);
-    exit;
-}
-
-// ====== KONFIG DB ======
-$DB_HOST = "localhost";
-$DB_USER = "##############";
-$DB_PASS = "##############";
-$DB_NAME = "llmchatbot";
-
-// ====== KONEKSI DB ======
-$conn = @new mysqli($DB_HOST, $DB_USER, $DB_PASS, $DB_NAME);
-if ($conn->connect_error) {    
-    error_log("DB connection failed: " . $conn->connect_error);
-    http_response_code(500);
-
-    $resp = [
-        "status"  => "error",
-        "message" => "DB connection failed"
-    ];
-    if (DEBUG_MODE) {
-        $resp["debug"] = $conn->connect_error;
+if (isset($_GET["user_id"])) {
+    $user_id = (int)$_GET["user_id"];
+} else {
+    $raw  = file_get_contents("php://input");
+    $data = json_decode($raw, true);
+    if (!is_array($data)) {
+        if (DEBUG_MODE) {
+            error_log("get_user.php JSON decode gagal. Raw: " . $raw);
+        }
+    } else {
+        $user_id = (int)($data["user_id"] ?? 0);
     }
-    echo json_encode($resp);
-    exit;
 }
 
-// ====== HELPER: RESPON JSON CEPAT ======
-function json_response(string $status, string $message = "", array $extra = []): void {
-    $base = ["status" => $status];
-    if ($message !== "") {
-        $base["message"] = $message;
-    }
-    echo json_encode(array_merge($base, $extra));
-    exit;
+if ($user_id <= 0) {
+    json_response("error", "user_id tidak valid");
 }
+
+$stmt = $conn->prepare("
+    SELECT id, username, email, cognitive, cq1, cq2, created_at
+    FROM users
+    WHERE id = ?
+    LIMIT 1
+");
+if (!$stmt) {
+    if (DEBUG_MODE) error_log("get_user.php prepare error: " . $conn->error);
+    json_response("error", "Gagal menyiapkan query get_user");
+}
+
+$stmt->bind_param("i", $user_id);
+$stmt->execute();
+$res = $stmt->get_result();
+
+if ($res && $row = $res->fetch_assoc()) {
+    $stmt->close();
+    json_response("success", "", ["user" => $row]);
+}
+
+$stmt->close();
+json_response("error", "User tidak ditemukan");
