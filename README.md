@@ -47,6 +47,7 @@ Pastikan Anda sudah menginstal Ollama dan menjalankan model yang dibutuhkan (mis
 
 ## 2. **Setup Database (XAMPP / MySQL)**
 Sistem menggunakan database MySQL untuk menyimpan data pengguna (login/register). XAMPP adalah cara termudah untuk menjalankan server web lokal (Apache) dan database (MySQL/MariaDB).
+
 A. Aktifkan XAMPP
 Jalankan aplikasi XAMPP Control Panel.
 Start modul Apache dan MySQL/MariaDB.
