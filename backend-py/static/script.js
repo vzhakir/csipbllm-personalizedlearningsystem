@@ -1,14 +1,12 @@
-// script.js – Semua logic frontend (login, register, main app)
+// script.js – Logika Frontend Lengkap (Chatbot, Login, Register, Modal)
 
-const PHP_API_BASE = "http://127.0.0.1:8001"; // sesuaikan kalau port PHP beda
+const PHP_API_BASE = "http://127.0.0.1:8001"; 
 
 // =========================================================
-// HELPER UMUM
+// HELPER UMUM & MARKDOWN
 // =========================================================
 const $ = (sel) => document.querySelector(sel);
 const getTrim = (el) => (el ? el.value.trim() : "");
-const getRaw = (el, fb = "") =>
-  el && typeof el.value === "string" ? el.value : fb;
 
 const escapeHtml = (t) =>
   String(t)
@@ -31,103 +29,258 @@ const loadMarked = () =>
   });
 
 const renderMarkdown = (text) => {
-  if (!markedLib) {
-    return String(text || "")
-      .split("\n")
-      .map((l) => `<p>${escapeHtml(l)}</p>`)
-      .join("");
-  }
+  if (!markedLib) return escapeHtml(text || "");
   try {
     return markedLib.parse(text || "");
   } catch {
-    return String(text || "")
-      .split("\n")
-      .map((l) => `<p>${escapeHtml(l)}</p>`)
-      .join("");
+    return escapeHtml(text || "");
   }
 };
 
 // =========================================================
-// SETUP: LOGIN PAGE
+// CHATBOT CORE STATE & UI CONTROL
 // =========================================================
-function setupLoginPage() {
-  // kalau sudah login, lempar ke halaman utama
-  if (localStorage.getItem("username")) {
-    window.location.href = "/";
-    return;
-  }
 
-  const loginUsername = $("#loginUsername");
-  const loginPassword = $("#loginPassword");
-  const loginError = $("#loginError");
-  const btnLogin = $("#btnLogin");
+let currentStage = 'chat'; // 'chat' atau 'evaluate'
+let correctAnswer = "";
+let wrongAttempts = 0;
 
-  const setBusy = (b) => {
-    if (!btnLogin) return;
-    btnLogin.disabled = b;
-    btnLogin.textContent = b ? "Memproses..." : "Masuk";
-  };
+const appendBubble = (role, html) => {
+  const chatBox = $("#chatBox");
+  if (!chatBox) return null;
+  const placeholder = chatBox.querySelector(".placeholder");
+  if (placeholder) placeholder.remove();
 
-  async function doLogin() {
-    if (!loginUsername || !loginPassword || !loginError) return;
+  let className = 'chat-bubble';
+  if (role === 'user') className += ' user';
+  else if (role === 'bot') className += ' bot';
+  else if (role === 'compare') className += ' compare';
+  else if (role === 'status') className += ' status';
+  
+  const div = document.createElement("div");
+  div.className = className;
+  div.innerHTML = html;
+  chatBox.appendChild(div);
+  chatBox.scrollTop = chatBox.scrollHeight;
+  return div;
+};
 
-    loginError.textContent = "";
-    const username = loginUsername.value.trim();
-    const password = loginPassword.value.trim();
-
-    if (!username || !password) {
-      loginError.textContent = "Username dan password wajib diisi.";
-      return;
+const setInputState = (stage, placeholderText = "") => {
+    currentStage = stage;
+    const mainInput = $("#mainInput");
+    const stageText = $("#currentStageText");
+    const sendBtn = $("#sendBtn");
+    
+    if (mainInput) {
+        mainInput.placeholder = placeholderText;
+        mainInput.value = ""; 
+        mainInput.rows = 1; 
+        mainInput.style.height = 'auto'; 
+        if (sendBtn) sendBtn.disabled = false;
     }
+    
+    if (stageText) {
+        if (stage === 'chat') {
+            stageText.innerHTML = 'Mode: <span style="color:var(--brand)">Pertanyaan Baru</span>';
+        } else if (stage === 'evaluate') {
+            stageText.innerHTML = `Mode: <span style="color:var(--accent-red)">Evaluasi Jawaban (Percobaan ke-${wrongAttempts + 1})</span>`;
+        }
+    }
+};
 
+const setBusy = (busy) => {
+    const sendBtn = $("#sendBtn");
+    const mainInput = $("#mainInput");
+    if (sendBtn) sendBtn.disabled = busy;
+    if (mainInput) mainInput.disabled = busy;
+    
+    const stageText = $("#currentStageText");
+    if (stageText) {
+        if (busy) {
+            stageText.textContent = "⏳ Memproses di Ollama...";
+        } else {
+            setInputState(currentStage, mainInput ? mainInput.placeholder : "");
+        }
+    }
+};
+
+
+// =========================================================
+// LOGIKA UTAMA: CHAT & EVALUATE (Ke Backend Python FastAPI)
+// =========================================================
+
+const sendQuestion = async (message) => {
+    if (!message) { alert("Tulis pertanyaan dulu."); return; }
+
+    const mode = $("#mode") ? $("#mode").value : "accurate";
+    const prompt_style = $("#promptStyle") ? $("#promptStyle").value : "zero_shot";
+    const cognitive = localStorage.getItem("cognitive") || "par";
+    const cq1 = localStorage.getItem("cq1") || "t";
+    const cq2 = localStorage.getItem("cq2") || "a";
+
+    appendBubble("user", `<b>Kamu:</b> ${escapeHtml(message)}`);
+    const loading = appendBubble("status", "<b>Bot:</b> ⏳ Menyusun jawaban...");
+
+    wrongAttempts = 0;
+    correctAnswer = "";
+    
     setBusy(true);
+
     try {
-      const res = await fetch(PHP_API_BASE + "/login.php", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
-      });
+        const res = await fetch("/chat", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ question: message, cognitive, cq1, cq2, mode, prompt_style }),
+        });
 
-      const data = await res.json();
-      console.log("DEBUG login:", data);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        
+        if (loading) loading.remove();
 
-      if (data.status !== "success") {
-        loginError.textContent = data.message || "Login gagal.";
-        return;
-      }
+        // Jawaban Utama
+        const mainHeader = `Tutor (${data.cognitive_main} | Latensi: ${data.latency_main_s.toFixed(2)}s | Style: ${data.prompt_style_main.toUpperCase()})`;
+        const mainReplyText = data.reply_main || "❌ Model gagal memberikan jawaban."; 
+        const ragMeta = data.used_rag ? `<div class="rag-meta">🔎 RAG: ${data.rag_mode} (Materi tambahan digunakan).</div>` : `<div class="rag-meta">🤖 Jawaban utama tanpa RAG tambahan.</div>`;
 
-      if (data.user_id) localStorage.setItem("user_id", data.user_id);
-      if (data.username) localStorage.setItem("username", data.username);
-      if (data.cognitive) localStorage.setItem("cognitive", data.cognitive);
-      if (data.cq1) localStorage.setItem("cq1", data.cq1);
-      if (data.cq2) localStorage.setItem("cq2", data.cq2);
+        const mainHtml = `<b>${escapeHtml(mainHeader)}:</b><br/>${ragMeta}${renderMarkdown(mainReplyText)}`;
+        appendBubble("bot", mainHtml);
 
-      window.location.href = "/";
-    } catch (err) {
-      console.error("Login error:", err);
-      loginError.textContent = "Tidak bisa terhubung ke server login.";
+        // Jawaban Perbandingan
+        if (data.reply_compare) {
+            const compareHeader = `Sudut Pandang Lain (${data.cognitive_compare} | CQ1:${data.cq1_compare}/CQ2:${data.cq2_compare})`;
+            const compareHtml = `<b>${escapeHtml(compareHeader)}:</b><br/>${renderMarkdown(data.reply_compare)}`;
+            appendBubble("compare", compareHtml);
+        }
+
+        correctAnswer = data.reply_main || ""; 
+        const followupQuestion = data.followup_question || "Mohon coba rumuskan jawaban Anda sekarang.";
+
+        // Tindak Lanjut / Rumusan Jawaban
+        const followupHtml = `<div style="font-weight: 600; margin-bottom: 5px;">Tindak Lanjut:</div>${renderMarkdown(followupQuestion)}`;
+        appendBubble("bot", followupHtml);
+        
+        // Alihkan ke mode Evaluasi (FITUR EVALUASI AKTIF)
+        setInputState('evaluate', "Tulis jawabanmu untuk dievaluasi...");
+
+    } catch (e) {
+        if (loading) loading.remove();
+        appendBubble("bot", `<b>Bot:</b> ❌ Terjadi error: ${escapeHtml(String(e))}`);
+        setInputState('chat', "Tulis pertanyaan atau topik baru...");
     } finally {
-      setBusy(false);
+        setBusy(false);
     }
-  }
+};
 
-  if (btnLogin) btnLogin.addEventListener("click", doLogin);
-  if (loginPassword) {
-    loginPassword.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") doLogin();
-    });
-  }
+const evaluateAnswer = async (userText) => {
+    if (!userText) { alert("Tulis jawaban dulu."); return; }
+    if (!correctAnswer) { alert("Internal Error: Kunci jawaban tidak ditemukan. Kirim pertanyaan dulu."); setInputState('chat', "Tulis pertanyaan atau topik baru..."); return; }
+
+    appendBubble("user", `<b>[JAWABAN] Kamu:</b> ${escapeHtml(userText)}`);
+    const loading = appendBubble("status", "<b>Bot:</b> ⏳ Menilai jawaban kamu...");
+    
+    setBusy(true);
+
+    try {
+        const res = await fetch("/evaluate", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user_answer: userText, correct_answer: correctAnswer, wrong_count: wrongAttempts }),
+        });
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        
+        if (loading) loading.remove();
+        
+        wrongAttempts = data.is_correct ? 0 : wrongAttempts + 1;
+
+        const status = data.is_correct ? "✅ Jawabanmu sudah tepat!" : "❌ Jawabanmu masih perlu diperbaiki.";
+        const detail = data.feedback || "";
+
+        // Tampilkan Hasil Evaluasi (FITUR EVALUASI IN-LINE)
+        const evalHtml = `
+            <div class="eval-result ${data.is_correct ? 'correct' : 'incorrect'}">${status}</div>
+            <div style="margin-top:4px;">${renderMarkdown(detail)}</div>
+            <div class="rag-meta" style="border-top: none;">Stage: ${data.hint_level || 'Tindak Lanjut'}</div>
+        `;
+        appendBubble("bot", `<b>Tutor (Feedback):</b><br/>${evalHtml}`);
+
+        if (data.is_correct) {
+            const followupHtml = `<div style="font-weight: 600; margin-bottom: 5px;">Tindak Lanjut:</div>${renderMarkdown(data.followup_question)}`;
+            appendBubble("bot", followupHtml);
+            
+            setInputState('chat', "🎉 Anda sudah menguasai materi! Tulis pertanyaan atau topik baru...");
+            correctAnswer = ""; 
+            
+        } else {
+            const followupHtml = `<div style="font-weight: 600; margin-bottom: 5px;">Petunjuk Baru:</div>${renderMarkdown(data.followup_question)}`;
+            appendBubble("bot", followupHtml);
+            
+            setInputState('evaluate', "Tulis perbaikan jawabanmu berdasarkan petunjuk di atas...");
+        }
+
+    } catch (e) {
+        if (loading) loading.remove();
+        appendBubble("bot", `<b>Bot:</b> ❌ Error menilai jawaban: ${escapeHtml(String(e))}`);
+        setInputState('evaluate', "Tulis perbaikan jawabanmu berdasarkan petunjuk di atas...");
+    } finally {
+        setBusy(false);
+    }
+};
+
+// --- Download History (FITUR PENTING) ---
+const triggerDownload = (blob, filename) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+};
+
+const downloadHistoryTxt = async () => {
+    try {
+      const res = await fetch("/history?format=txt");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const txt = data.data || "Belum ada riwayat percakapan.";
+      triggerDownload(new Blob([txt], { type: "text/plain" }), "history.txt");
+    } catch (e) {
+      appendBubble("bot", `❌ Gagal mengunduh riwayat TXT: ${escapeHtml(String(e))}`);
+    }
+};
+
+const downloadHistoryJson = async () => {
+    try {
+      const res = await fetch("/history?format=json");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      triggerDownload(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }), "history.json");
+    } catch (e) {
+      appendBubble("bot", `❌ Gagal mengunduh riwayat JSON: ${escapeHtml(String(e))}`);
+    }
+};
+
+
+// =========================================================
+// PHP API CLIENT (LOGIN, REGISTER, USER INFO) - FITUR PENTING
+// =========================================================
+
+const COG_OPTIONS = { par: "PAR — Practical-Analytical", tar: "TAR — Theoretical-Analytical" };
+const CQ_OPTIONS = { t: "T — Teoretis / Thinking", a: "A — Analitis / Abstract", p: "P — Praktis / Project" };
+
+function createSelectHTML(id, optionsMap, currentValue) {
+    let options = '';
+    for (const [val, label] of Object.entries(optionsMap)) {
+      const selected = val === currentValue ? 'selected' : '';
+      options += `<option value="${val}" ${selected}>${label}</option>`;
+    }
+    return `<select id="${id}" class="user-modal-select">${options}</select>`;
 }
 
-// =========================================================
-// SETUP: REGISTER PAGE
-// =========================================================
-function setupRegisterPage() {
-  if (localStorage.getItem("username")) {
-    window.location.href = "/";
-    return;
-  }
 
+// --- Register Logic ---
+function setupRegisterPage() {
+  if (localStorage.getItem("username")) { window.location.href = "/"; return; }
   const regUsername = $("#regUsername");
   const regPassword = $("#regPassword");
   const regCognitive = $("#regCognitive");
@@ -136,565 +289,411 @@ function setupRegisterPage() {
   const registerError = $("#registerError");
   const btnRegister = $("#btnRegister");
 
-  const setBusy = (b) => {
+  const setRegBusy = (b) => {
     if (!btnRegister) return;
     btnRegister.disabled = b;
     btnRegister.textContent = b ? "Memproses..." : "Daftar";
   };
 
   async function doRegister() {
-    if (!regUsername || !regPassword || !registerError) return;
-
     registerError.textContent = "";
     const username = regUsername.value.trim();
     const password = regPassword.value.trim();
+    const email = $("#regEmail") ? $("#regEmail").value.trim() : ""; 
     const cognitive = regCognitive ? regCognitive.value.trim() : "";
     const cq1 = regCq1 ? regCq1.value.trim() : "";
     const cq2 = regCq2 ? regCq2.value.trim() : "";
 
-    if (!username || !password) {
-      registerError.textContent = "Username dan password wajib diisi.";
-      return;
-    }
+    if (!username || !password) { registerError.textContent = "Username dan password wajib diisi."; return; }
 
-    setBusy(true);
+    setRegBusy(true);
     try {
       const res = await fetch(PHP_API_BASE + "/register.php", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password, cognitive, cq1, cq2 }),
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password, email, cognitive, cq1, cq2 }),
       });
-
       const data = await res.json();
-      console.log("DEBUG register:", data);
-
-      if (data.status !== "success") {
-        registerError.textContent = data.message || "Registrasi gagal.";
-        return;
-      }
+      if (data.status !== "success") { registerError.textContent = data.message || "Registrasi gagal."; return; }
 
       if (data.user_id) localStorage.setItem("user_id", data.user_id);
       if (data.username) localStorage.setItem("username", data.username);
+      if (email) localStorage.setItem("email", email); 
       if (data.cognitive) localStorage.setItem("cognitive", data.cognitive);
       if (data.cq1) localStorage.setItem("cq1", data.cq1);
       if (data.cq2) localStorage.setItem("cq2", data.cq2);
-
       window.location.href = "/";
     } catch (err) {
-      console.error("Register error:", err);
       registerError.textContent = "Tidak bisa terhubung ke server registrasi.";
     } finally {
-      setBusy(false);
+      setRegBusy(false);
     }
   }
 
   if (btnRegister) btnRegister.addEventListener("click", doRegister);
-  if (regPassword) {
-    regPassword.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") doRegister();
-    });
-  }
+  if (regPassword) { regPassword.addEventListener("keydown", (e) => { if (e.key === "Enter") doRegister(); }); }
 }
 
-// =========================================================
-// SETUP: MAIN APP (INDEX.HTML)
-// =========================================================
-function setupMainApp() {
-  // kalau belum login, paksa ke login
-  if (!localStorage.getItem("username")) {
-    window.location.href = "/static/login.html";
-    return;
-  }
+// --- Login Logic ---
+function setupLoginPage() {
+    if (localStorage.getItem("username")) { window.location.href = "/"; return; }
+    const loginUsername = $("#loginUsername");
+    const loginPassword = $("#loginPassword");
+    const loginError = $("#loginError");
+    const btnLogin = $("#btnLogin");
 
-  loadMarked()
-    .then((m) => {
-      markedLib = m;
-    })
-    .catch((e) => console.warn("marked gagal load:", e));
+    const setLogBusy = (b) => {
+        if (!btnLogin) return;
+        btnLogin.disabled = b;
+        btnLogin.textContent = b ? "Memproses..." : "Masuk";
+    };
 
-  const sendBtn = $("#sendBtn");
-  const evalBtn = $("#evalBtn");
-  const chatBox = $("#chatBox");
-  const userAnswer = $("#userAnswer");
-  const evalResult = $("#evalResult");
-  const answerSection = $("#answerSection");
-  const historySection = $("#historySection");
-  const questionInput = $("#question");
-  const cognitiveSelect = $("#cognitive");
-  const cq1Select = $("#cq1");
-  const cq2Select = $("#cq2");
-  const modeSelect = $("#mode");
-  const profileSection = $(".profile-section");
-  const profileSummary = $("#profileSummary");
-  const cognitiveWrapper = $("#cognitiveWrapper");
-  const downloadTxt = $("#downloadTxt");
-  const downloadJson = $("#downloadJson");
-  const followupSection = $("#followupSection");
-  const followupText = $("#followupText");
-  const followupStage = $("#followupStage");
-  const historyButtons = $("#historyButtons");
+    async function doLogin() {
+        loginError.textContent = "";
+        const username = loginUsername.value.trim();
+        const password = loginPassword.value.trim();
 
-  let correctAnswer = "";
-  let wrongAttempts = 0;
+        if (!username || !password) { loginError.textContent = "Username dan password wajib diisi."; return; }
 
-  const setBusy = (btn, busy) => {
-    if (!btn) return;
-    btn.disabled = busy;
-  };
+        setLogBusy(true);
+        try {
+            const res = await fetch(PHP_API_BASE + "/login.php", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username, password }),
+            });
+            const data = await res.json();
+            if (data.status !== "success") { loginError.textContent = data.message || "Login gagal."; return; }
 
-  const appendBubble = (role, html) => {
-    if (!chatBox) return null;
-    const placeholder = chatBox.querySelector(".placeholder");
-    if (placeholder) placeholder.remove();
+            if (data.user_id) localStorage.setItem("user_id", data.user_id);
+            if (data.username) localStorage.setItem("username", data.username);
+            if (data.email) localStorage.setItem("email", data.email); 
+            if (data.cognitive) localStorage.setItem("cognitive", data.cognitive);
+            if (data.cq1) localStorage.setItem("cq1", data.cq1);
+            if (data.cq2) localStorage.setItem("cq2", data.cq2);
 
-    const div = document.createElement("div");
-    div.className = `chat-bubble ${role}`;
-    div.innerHTML = html;
-    chatBox.appendChild(div);
-    chatBox.scrollTop = chatBox.scrollHeight;
-    return div;
-  };
-
-  // ---- init profile from localStorage ----
-  const initProfileFromStorage = () => {
-    const storedUser = localStorage.getItem("username");
-    const storedCognitive = localStorage.getItem("cognitive") || "";
-    const storedCq1 = localStorage.getItem("cq1") || "";
-    const storedCq2 = localStorage.getItem("cq2") || "";
-
-    if (storedCognitive && cognitiveSelect)
-      cognitiveSelect.value = storedCognitive;
-    if (storedCq1 && cq1Select) cq1Select.value = storedCq1;
-    if (storedCq2 && cq2Select) cq2Select.value = storedCq2;
-
-    const haveFullProfile =
-      storedCognitive !== "" && storedCq1 !== "" && storedCq2 !== "";
-
-    if (haveFullProfile) {
-      if (profileSection) profileSection.classList.add("hidden-profile");
-
-      if (profileSummary) {
-        const cogLabel =
-          storedCognitive === "tar"
-            ? "TAR — Theoretical-Analytical"
-            : "PAR — Practical-Analytical";
-
-        const cqMap = {
-          p: "P — Praktis / Project",
-          t: "T — Teoretis / Thinking",
-          a: "A — Analitis / Abstract",
-          none: "NONE",
-        };
-
-        const cq1Label = cqMap[storedCq1] || "-";
-        const cq2Label = cqMap[storedCq2] || "-";
-        const name = storedUser || "Pengguna";
-
-        profileSummary.innerHTML = `
-          Profil terdeteksi untuk <b>${escapeHtml(name)}</b>:<br/>
-          Tipe Kognitif: <b>${escapeHtml(cogLabel)}</b><br/>
-          CQ1: <b>${escapeHtml(cq1Label)}</b>, CQ2: <b>${escapeHtml(
-          cq2Label
-        )}</b>.
-        `;
-        profileSummary.style.display = "block";
-      }
-    } else {
-      if (profileSection) profileSection.classList.remove("hidden-profile");
-      if (profileSummary) {
-        profileSummary.style.display = "none";
-        profileSummary.innerHTML = "";
-      }
+            window.location.href = "/";
+        } catch (err) {
+            loginError.textContent = "Tidak bisa terhubung ke server login.";
+        } finally {
+            setLogBusy(false);
+        }
     }
-  };
+    if (btnLogin) btnLogin.addEventListener("click", doLogin);
+    if (loginPassword) { loginPassword.addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); }); }
+}
 
-  initProfileFromStorage();
+// --- User Info & Update Logic (Modal Logic) ---
 
-  // ---- /chat ----
-  const sendQuestion = async () => {
-    const message = getTrim(questionInput);
-    if (!message) {
-      alert("Tulis pertanyaan dulu.");
-      return;
-    }
-  const cognitive =
-    localStorage.getItem("cognitive") || getRawValue(cognitiveSelect, "par");
-  const cq1 =
-    localStorage.getItem("cq1") || getRawValue(cq1Select, "t");
-  const cq2 =
-    localStorage.getItem("cq2") || getRawValue(cq2Select, "a");
-  const mode = getRawValue(modeSelect, "accurate");
+async function doUpdateProfile() {
+    const userId = localStorage.getItem("user_id");
+    const newCognitive = $("#udCognitiveSelect").value;
+    const newCq1 = $("#udCq1Select").value;
+    const newCq2 = $("#udCq2Select").value;
+    const newEmail = getTrim($("#udEmailInput"));
+    const btnSaveProfile = $("#btnSaveProfile");
 
-    appendBubble("user", `<b>Kamu:</b> ${escapeHtml(message)}`);
-    const loading = appendBubble(
-      "bot",
-      "<b>Bot:</b> ⏳ Menyusun jawaban..."
-    );
-
-    if (answerSection) answerSection.style.display = "none";
-    if (historySection) historySection.style.display = "none";
-    if (followupSection) followupSection.style.display = "none";
-    if (historyButtons) historyButtons.style.display = "none";
-    correctAnswer = "";
-    wrongAttempts = 0;
-    if (evalResult) evalResult.textContent = "";
-
-    setBusy(sendBtn, true);
+    if (!userId) { alert("user_id tidak ditemukan. Gagal update."); return; }
+    
+    const isModalBusy = (b) => { 
+        if(btnSaveProfile) btnSaveProfile.disabled = b;
+        const debugEl = $("#udDebug");
+        if(debugEl) debugEl.textContent = b ? "⏳ Memproses update profil..." : "";
+    };
+    isModalBusy(true);
+    
     try {
-      const res = await fetch("/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          question: message,
-          cognitive,
-          cq1,
-          cq2,
-          mode,
-        }),
-      });
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-
-      if (loading) loading.remove();
-
-      const ragMeta =
-        data.meta && data.meta.rag_used
-          ? `<div class="rag-meta">🔎 RAG: ${
-              data.meta.source_count || 0
-            } sumber digunakan.</div>`
-          : `<div class="rag-meta">🤖 Jawaban utama tanpa RAG tambahan.</div>`;
-
-      const html = `<b>Bot:</b><br/>${ragMeta}${renderMarkdown(
-        data.answer || ""
-      )}`;
-      appendBubble("bot", html);
-
-      correctAnswer = data.correct_answer || "";
-      const followup = data.followup || null;
-
-      if (correctAnswer && answerSection)
-        answerSection.style.display = "block";
-
-      if (followup && followupSection && followupText && followupStage) {
-        followupSection.style.display = "block";
-        followupText.innerHTML = renderMarkdown(followup.text || "");
-        followupStage.textContent = `Stage: ${followup.stage || "-"}`;
-      }
-
-      if (historySection && historyButtons) {
-        historySection.style.display = "block";
-        historyButtons.style.display = "flex";
-      }
-    } catch (e) {
-      console.error(e);
-      if (loading) loading.remove();
-      appendBubble(
-        "bot",
-        `<b>Bot:</b> ❌ Terjadi error saat memproses pertanyaan: ${escapeHtml(
-          String(e)
-        )}`
-      );
+        const res = await fetch(PHP_API_BASE + "/update_profile.php", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user_id: Number(userId), email: newEmail, cognitive: newCognitive, cq1: newCq1, cq2: newCq2 }),
+        });
+        const data = await res.json();
+        
+        if (data.status === "success") {
+            localStorage.setItem("cognitive", data.cognitive);
+            localStorage.setItem("cq1", data.cq1);
+            localStorage.setItem("cq2", data.cq2);
+            localStorage.setItem("email", data.email);
+            $("#udDebug").textContent = "✅ Profil berhasil diupdate!";
+            loadUserInfoForModal(); 
+            initProfileFromStorage(); 
+        } else {
+             $("#udDebug").textContent = "❌ Gagal update: " + (data.message || "Unknown error");
+        }
+    } catch (err) {
+        $("#udDebug").textContent = "❌ Error koneksi ke update_profile.php";
     } finally {
-      setBusy(sendBtn, false);
+        isModalBusy(false);
     }
-  };
+}
 
-  // ---- /evaluate ----
-  const evaluateAnswer = async () => {
-    const userText = getTrim(userAnswer);
-    if (!userText) {
-      alert("Tulis jawaban dulu.");
-      return;
-    }
-    if (!correctAnswer) {
-      alert("Belum ada jawaban kunci.");
-      return;
-    }
-
-    setBusy(evalBtn, true);
-    if (evalResult)
-      evalResult.textContent = "⏳ Menilai jawaban kamu...";
-
-    try {
-      const res = await fetch("/evaluate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_answer: userText,
-          correct_answer: correctAnswer,
-        }),
-      });
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-
-      wrongAttempts = data.is_correct ? 0 : wrongAttempts + 1;
-
-      const status = data.is_correct
-        ? "✅ Jawabanmu sudah tepat!"
-        : "❌ Jawabanmu masih perlu diperbaiki.";
-      const detail = data.feedback || "";
-      const score = data.score ?? "-";
-
-      if (evalResult) {
-        evalResult.innerHTML = `
-          <div class="eval-score">Skor: <b>${score}</b>/100</div>
-          <div>${status}</div>
-          <div style="margin-top:4px;">${renderMarkdown(detail)}</div>
-        `;
-      }
-    } catch (e) {
-      console.error(e);
-      if (evalResult)
-        evalResult.textContent = `Error menilai jawaban: ${String(e)}`;
-    } finally {
-      setBusy(evalBtn, false);
-    }
-  };
-
-  // ---- history ----
-  const triggerDownload = (blob, filename) => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.style.display = "none";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  };
-
-  const downloadHistoryTxt = async () => {
-    try {
-      const res = await fetch("/history?format=txt");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const txt = await res.text();
-      triggerDownload(new Blob([txt], { type: "text/plain" }), "history.txt");
-    } catch (e) {
-      console.error(e);
-      appendBubble(
-        "bot",
-        `❌ Gagal mengunduh riwayat TXT: ${escapeHtml(String(e))}`
-      );
-    }
-  };
-
-  const downloadHistoryJson = async () => {
-    try {
-      const res = await fetch("/history?format=json");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      triggerDownload(
-        new Blob([JSON.stringify(data, null, 2)], {
-          type: "application/json",
-        }),
-        "history.json"
-      );
-    } catch (e) {
-      console.error(e);
-      appendBubble(
-        "bot",
-        `❌ Gagal mengunduh riwayat JSON: ${escapeHtml(String(e))}`
-      );
-    }
-  };
-
-  // ---- event utama ----
-  if (sendBtn) sendBtn.addEventListener("click", sendQuestion);
-  if (questionInput) {
-    questionInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        sendQuestion();
-      }
-    });
-  }
-
-  if (evalBtn) evalBtn.addEventListener("click", evaluateAnswer);
-  if (userAnswer) {
-    userAnswer.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        evaluateAnswer();
-      }
-    });
-  }
-
-  if (downloadTxt) downloadTxt.addEventListener("click", downloadHistoryTxt);
-  if (downloadJson) downloadJson.addEventListener("click", downloadHistoryJson);
-
-  // ---- auth topbar ----
-  const topbarUsername = $("#topbarUsername");
-  if (topbarUsername) {
-    topbarUsername.textContent =
-      localStorage.getItem("username") || "Pengguna";
-  }
-
-  const btnLogoutMain = $("#btnLogoutMain");
-  if (btnLogoutMain) {
-    btnLogoutMain.addEventListener("click", () => {
-      try {
-        fetch(PHP_API_BASE + "/logout.php", { method: "POST" }).catch(() => {});
-      } catch (e) {
-        console.warn("logout error:", e);
-      }
-
-      localStorage.removeItem("username");
-      localStorage.removeItem("user_id");
-      localStorage.removeItem("cognitive");
-      localStorage.removeItem("cq1");
-      localStorage.removeItem("cq2");
-
-      window.location.href = "/static/login.html";
-    });
-  }
-
-  // ---- user dashboard popup ----
-  const btnUserDashboard = $("#btnUserDashboard");
-  const userModalOverlay = $("#userDashboardOverlay");
-  const btnCloseUserModal = $("#btnCloseUserModal");
-  const btnDeleteUser = $("#btnDeleteUser");
-
-  const udUsername = $("#udUsername");
-  const udCognitive = $("#udCognitive");
-  const udCq1 = $("#udCq1");
-  const udCq2 = $("#udCq2");
-  const udCreatedAt = $("#udCreatedAt");
-  const udDebug = $("#udDebug");
-
-  function openUserModal() {
-    if (!userModalOverlay) return;
-    userModalOverlay.style.display = "flex";
-    loadUserInfoForModal();
-  }
-
-  function closeUserModal() {
-    if (!userModalOverlay) return;
-    userModalOverlay.style.display = "none";
-  }
-
-  async function loadUserInfoForModal() {
+async function loadUserInfoForModal() {
     const userId = localStorage.getItem("user_id");
     const username = localStorage.getItem("username") || "-";
-    const cognitive = localStorage.getItem("cognitive") || "";
-    const cq1 = localStorage.getItem("cq1") || "";
-    const cq2 = localStorage.getItem("cq2") || "";
+    const udUsername = $("#udUsername");
+    const udEmailContainer = $("#udEmailContainer"); 
+    const udCognitiveContainer = $("#udCognitiveContainer");
+    const udCq1Container = $("#udCq1Container");
+    const udCq2Container = $("#udCq2Container");
+    const udCreatedAt = $("#udCreatedAt");
+    const udDebug = $("#udDebug");
+    const userModalFooter = $(".user-modal-footer");
 
     if (udUsername) udUsername.textContent = username;
     if (udDebug) udDebug.textContent = "";
 
-    const mapCog = {
-      par: "PAR — Practical-Analytical",
-      tar: "TAR — Theoretical-Analytical",
-      "": "Belum diatur",
-    };
-    const mapCq = {
-      t: "T — Teoretis / Thinking",
-      a: "A — Analitis / Abstract",
-      p: "P — Praktis / Project",
-      "": "-",
-    };
+    let btnUpdate = document.getElementById("btnSaveProfile");
+    if (btnUpdate) btnUpdate.remove();
 
-    if (udCognitive)
-      udCognitive.textContent = mapCog[cognitive] || cognitive || "Belum diatur";
-    if (udCq1) udCq1.textContent = mapCq[cq1] || cq1 || "-";
-    if (udCq2) udCq2.textContent = mapCq[cq2] || cq2 || "-";
-    if (udCreatedAt) udCreatedAt.textContent = "-";
-
-    if (!userId) {
-      if (udDebug)
-        udDebug.textContent =
-          "user_id tidak ada di localStorage (mungkin login versi lama).";
-      return;
-    }
+    if (!userId) { return; }
 
     try {
       const res = await fetch(PHP_API_BASE + "/userinfo.php", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: Number(userId) }),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ user_id: Number(userId) }),
       });
       const data = await res.json();
-      console.log("DEBUG userinfo:", data);
 
       if (data.status === "success" && data.user) {
         const u = data.user;
-        if (udUsername && u.username) udUsername.textContent = u.username;
-        if (udCognitive && u.cognitive)
-          udCognitive.textContent = mapCog[u.cognitive] || u.cognitive;
-        if (udCq1 && u.cq1) udCq1.textContent = mapCq[u.cq1] || u.cq1;
-        if (udCq2 && u.cq2) udCq2.textContent = mapCq[u.cq2] || u.cq2;
-        if (udCreatedAt && u.created_at)
-          udCreatedAt.textContent = u.created_at;
+        
+        if (udEmailContainer) {
+            udEmailContainer.innerHTML = `<span class="label">Email:</span>
+                <input type="email" id="udEmailInput" class="user-modal-input" value="${escapeHtml(u.email || "")}" />`;
+        }
+        if (udCognitiveContainer) {
+            udCognitiveContainer.innerHTML = `<span class="label">Tipe Kognitif:</span>
+                ${createSelectHTML("udCognitiveSelect", COG_OPTIONS, u.cognitive || "par")}`;
+        }
+        if (udCq1Container) {
+            udCq1Container.innerHTML = `<span class="label">CQ1:</span>
+                ${createSelectHTML("udCq1Select", CQ_OPTIONS, u.cq1 || "t")}`;
+        }
+        if (udCq2Container) {
+            udCq2Container.innerHTML = `<span class="label">CQ2:</span>
+                ${createSelectHTML("udCq2Select", CQ_OPTIONS, u.cq2 || "a")}`;
+        }
+
+        if (udCreatedAt) udCreatedAt.textContent = u.created_at || "-";
+        
+        btnUpdate = document.createElement("button");
+        btnUpdate.id = "btnSaveProfile";
+        btnUpdate.className = "user-update-btn";
+        btnUpdate.textContent = "Simpan Perubahan";
+        btnUpdate.addEventListener("click", doUpdateProfile);
+
+        const btnDeleteUser = $("#btnDeleteUser");
+        if (userModalFooter) { userModalFooter.insertBefore(btnUpdate, btnDeleteUser); }
+
       } else if (udDebug) {
         udDebug.textContent = "Gagal mengambil data user dari server.";
       }
     } catch (err) {
-      console.error("userinfo error:", err);
       if (udDebug) udDebug.textContent = "Error koneksi ke userinfo.php";
     }
-  }
-
-  if (btnUserDashboard)
-    btnUserDashboard.addEventListener("click", openUserModal);
-  if (btnCloseUserModal)
-    btnCloseUserModal.addEventListener("click", closeUserModal);
-  if (userModalOverlay) {
-    userModalOverlay.addEventListener("click", (e) => {
-      if (e.target === userModalOverlay) closeUserModal();
-    });
-  }
-
-  if (btnDeleteUser) {
-    btnDeleteUser.addEventListener("click", async () => {
-      const userId = localStorage.getItem("user_id");
-      if (!userId) {
-        alert("user_id tidak ditemukan. Coba login ulang dulu.");
-        return;
-      }
-
-      const sure = confirm(
-        "Yakin ingin menghapus akun ini? Tindakan ini permanen dan tidak bisa dibatalkan."
-      );
-      if (!sure) return;
-
-      try {
-        const res = await fetch(PHP_API_BASE + "/delete_user.php", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_id: Number(userId) }),
-        });
-        const data = await res.json();
-        console.log("DEBUG delete_user:", data);
-
-        if (data.status === "success") {
-          alert("Akun berhasil dihapus.");
-          localStorage.clear();
-          window.location.href = "/static/register.html";
-        } else {
-          alert("Gagal menghapus akun: " + (data.message || "unknown error"));
-        }
-      } catch (err) {
-        console.error("delete_user error:", err);
-        alert("Error koneksi ke delete_user.php");
-      }
-    });
-  }
 }
 
-// =========================================================
-// ENTRY POINT: DETEKSI HALAMAN
-// =========================================================
-document.addEventListener("DOMContentLoaded", () => {
-  const path = window.location.pathname;
+// --- Init Profile Summary (Fitur Penting) ---
+const initProfileFromStorage = () => {
+    const storedCognitive = localStorage.getItem("cognitive") || "par";
+    const storedCq1 = localStorage.getItem("cq1") || "t";
+    const storedCq2 = localStorage.getItem("cq2") || "a";
+    const cognitiveSelect = $("#cognitive");
+    
+    if (cognitiveSelect) cognitiveSelect.value = storedCognitive;
+    if ($("#profileSummary")) {
+        const cogLabel = storedCognitive === "tar" ? "TAR — Theoretical-Analytical" : "PAR — Practical-Analytical";
+        const cqMap = { p: "P/Project", t: "T/Thinking", a: "A/Abstract" };
 
-  if (path.includes("login.html")) {
-    setupLoginPage();
-  } else if (path.includes("register.html")) {
-    setupRegisterPage();
-  } else {
-    setupMainApp(); // diasumsikan index.html / halaman utama
-  }
+        $("#profileSummary").innerHTML = `
+          Profil Anda: <b>${escapeHtml(cogLabel)}</b> | CQ1: <b>${escapeHtml(cqMap[storedCq1] || '-')}</b>, CQ2: <b>${escapeHtml(cqMap[storedCq2] || '-')}</b>
+        `;
+    }
+};
+
+// --- History Sidebar Logic ---
+const loadHistorySidebar = async () => {
+    const historyList = $("#historyList");
+    if (!historyList) return;
+    
+    historyList.innerHTML = `<div class="loading-history">⏳ Memuat riwayat...</div>`;
+    
+    try {
+        const res = await fetch("/history?format=json");
+        const data = await res.json();
+
+        if (!res.ok || !data.history) throw new Error("Gagal fetch history.");
+
+        historyList.innerHTML = ''; 
+        if (data.history.length === 0) {
+            historyList.innerHTML = `<div style="padding:10px; font-size:13px;">Belum ada riwayat.</div>`;
+            return;
+        }
+
+        data.history.slice(-20).reverse().forEach((conv, index) => {
+            const title = (conv.user_message || "Untitled Chat").substring(0, 30);
+            
+            const item = document.createElement("div");
+            item.className = 'history-item';
+            item.textContent = title;
+            item.dataset.index = index; 
+            
+            item.addEventListener('click', () => {
+                alert(`Fungsi memuat riwayat lama: ${title} (Index: ${index}) belum diimplementasikan.`);
+            });
+            
+            historyList.appendChild(item);
+        });
+
+    } catch (e) {
+        historyList.innerHTML = `<div style="padding:10px; font-size:13px; color:var(--accent-red);">❌ Gagal load riwayat.</div>`;
+        console.error("Error loading history sidebar:", e);
+    }
+};
+
+// --- New Chat Logic (FITUR PENTING) ---
+const startNewChat = () => {
+    if (!confirm("Yakin ingin memulai obrolan baru? Riwayat percakapan saat ini akan hilang.")) {
+        return;
+    }
+    
+    // 1. Reset State JavaScript
+    currentStage = 'chat';
+    correctAnswer = "";
+    wrongAttempts = 0;
+    
+    // 2. Bersihkan Tampilan Chat
+    const chatBox = $("#chatBox");
+    if (chatBox) chatBox.innerHTML = `
+        <div class="placeholder">
+            <h1>Halo, <span id="welcomeUsername">${localStorage.getItem("username") || "Pengguna"}!</span></h1>
+            <p>Sesi baru dimulai. Tulis pertanyaan atau topik di bawah ini.</p>
+            <div id="profileSummary" class="profile-summary"></div>
+        </div>
+    `;
+
+    initProfileFromStorage();
+    
+    // 3. Reset Input Bar dan Status
+    setInputState('chat', "Tulis pertanyaan atau topik yang ingin kamu pelajari...");
+    
+    // 4. Muat ulang Sidebar Riwayat
+    loadHistorySidebar();
+    
+    console.log("Sesi obrolan baru dimulai.");
+};
+
+
+// =========================================================
+// EVENT HANDLER UTAMA (Kirim/Enter Logic)
+// =========================================================
+
+const handleSendButtonClick = () => {
+    const mainInput = $("#mainInput");
+    if (mainInput && !mainInput.disabled) {
+        const inputValue = mainInput.value.trim();
+        
+        if (inputValue === "") {
+            alert("Input tidak boleh kosong.");
+            return;
+        }
+        
+        if (currentStage === 'chat') {
+            sendQuestion(inputValue);
+        } else if (currentStage === 'evaluate') {
+            evaluateAnswer(inputValue);
+        }
+    }
+};
+
+const handleInputKeydown = (e) => {
+    const mainInput = $("#mainInput");
+    
+    // PERBAIKAN LOGIKA: Enter untuk KIRIM, Ctrl/Shift/Meta + Enter untuk NEWLINE
+    if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault(); 
+        handleSendButtonClick();
+        // Reset tinggi setelah kirim
+        if (mainInput) {
+            mainInput.style.height = 'auto';
+            mainInput.rows = 1;
+        }
+        return;
+    }
+    
+    // Auto-expand textarea (Logic ini harus diaktifkan pada event 'input' juga)
+    if (mainInput) {
+        setTimeout(() => { 
+            mainInput.style.height = 'auto';
+            mainInput.style.height = mainInput.scrollHeight + 'px';
+        }, 0);
+    }
+};
+
+
+// =========================================================
+// ENTRY POINT & LISTENERS UTAMA
+// =========================================================
+
+function setupMainApp() {
+    if (!localStorage.getItem("username")) { window.location.href = "/static/login.html"; return; }
+    
+    loadMarked().then((m) => { markedLib = m; });
+
+    const mainInput = $("#mainInput");
+    const storedUsername = localStorage.getItem("username") || "Pengguna";
+    
+    if ($("#welcomeUsername")) { $("#welcomeUsername").textContent = storedUsername; }
+    if ($("#topbarUsername")) { $("#topbarUsername").innerHTML = `<span class="user-avatar-circle">🧑</span><span class="username-text">${storedUsername}</span>`; }
+    
+    initProfileFromStorage();
+    loadHistorySidebar(); // Muat sidebar saat startup
+
+    setInputState('chat', "Tulis pertanyaan atau topik yang ingin kamu pelajari...");
+
+    // Tombol Kirim/Evaluasi
+    if ($("#sendBtn")) $("#sendBtn").addEventListener("click", handleSendButtonClick);
+    // Tombol Enter/Newline
+    if (mainInput) mainInput.addEventListener("keydown", handleInputKeydown);
+    if (mainInput) mainInput.addEventListener("input", handleInputKeydown); 
+
+    // Sidebar Listeners
+    if ($("#downloadTxt")) $("#downloadTxt").addEventListener("click", downloadHistoryTxt);
+    if ($("#downloadJson")) $("#downloadJson").addEventListener("click", downloadHistoryJson);
+    if ($("#btnNewChat")) $("#btnNewChat").addEventListener("click", startNewChat);
+
+    // Modal Listeners
+    const btnUserDashboard = $("#btnUserDashboard");
+    const userModalOverlay = $("#userDashboardOverlay");
+    const btnCloseUserModal = $("#btnCloseUserModal");
+
+    if (btnUserDashboard) btnUserDashboard.addEventListener("click", () => { 
+        if (userModalOverlay) userModalOverlay.style.display = "flex";
+        loadUserInfoForModal(); 
+    });
+    if (btnCloseUserModal && userModalOverlay) btnCloseUserModal.addEventListener("click", () => { userModalOverlay.style.display = "none"; });
+    if (userModalOverlay) {
+        userModalOverlay.addEventListener("click", (e) => {
+          if (e.target === userModalOverlay) userModalOverlay.style.display = "none";
+        });
+    }
+
+    // Logout Logic
+    const btnLogoutMain = $("#btnLogoutMain");
+    if (btnLogoutMain) {
+        btnLogoutMain.addEventListener("click", () => {
+            localStorage.clear();
+            window.location.href = "/static/login.html";
+        });
+    }
+}
+
+
+document.addEventListener("DOMContentLoaded", () => {
+    const path = window.location.pathname;
+
+    if (path.includes("login.html")) {
+        setupLoginPage();
+    } else if (path.includes("register.html")) {
+        setupRegisterPage();
+    } else {
+        setupMainApp(); 
+    }
 });
