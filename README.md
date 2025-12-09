@@ -72,6 +72,12 @@ mysql -u root
 ```
 ## LANGKAH 2.3. 
 Setelah masuk ke prompt MySQL (prompt: mysql> ), jalankan perintah SQL berikut:
+
+```sql
+CREATE DATABASE llmchatbot;
+USE llmchatbot;
+```
+
 ```sql
 CREATE TABLE users (
     id INT AUTO_INCREMENT PRIMARY KEY,
