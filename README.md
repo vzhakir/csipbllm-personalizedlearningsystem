@@ -42,7 +42,7 @@ Sistem ini menggunakan arsitektur dual-backend:
 
 ---
 
-## 1. PRASYARAT
+# 1. PRASYARAT
 Pastikan Anda telah menginstal:
 - Ollama: Untuk menjalankan Local LLM (deepseek-r1:8b dan mxbai-embed-large).
 - XAMPP/MAMP/WAMP: Untuk menjalankan server PHP dan MySQL/MariaDB.
