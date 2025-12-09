@@ -3,4 +3,6 @@
 require_once "config.php";
 
 // Di sini kita tidak pakai DB, tapi config dipakai untuk CORS + helper JSON.
-json_response("success", "Logout berhasil");
+// Menggunakan status code 200 secara eksplisit.
+json_response("success", "Logout berhasil", [], 200);
+?>
