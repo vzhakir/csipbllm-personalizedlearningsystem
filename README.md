@@ -1,6 +1,40 @@
-============================================================
-PANDUAN PENYIAPAN SISTEM CHATBOT CSIPBLLM ADAPTIF (DUAL-BACKEND)
-============================================================
+# 🎓 LLM — Personalized Learning System
+
+Asisten belajar interaktif berbasis **FastAPI** + **Ollama LLM**.  
+Sistem ini menyesuaikan jawaban dengan **gaya belajar** (Visual, Auditori, Kinestetik), serta menyimpan **riwayat percakapan** yang bisa diunduh.
+
+---
+
+✨ Features
+- Jawaban adaptif sesuai tipe kognitif
+- Mode perbandingan acak antar gaya belajar
+- Evaluasi jawaban (Benar/Salah dengan feedback)
+- Riwayat percakapan dapat diunduh (TXT / JSON)
+- Frontend sederhana dengan HTML, CSS, JS
+
+---
+
+🛠 Tech Stack
+- Backend LLM: FastAPI, Uvicorn
+- Backend Auth: PHP, MySQL (melalui XAMPP)
+- LLM: Ollama (gpt-oss, mxbai-embed-large)
+- Frontend: HTML, CSS, JavaScript
+
+---
+
+## 📂 Project Structure
+```markdown
+📁 csipbllm-personalizedlearningsystem
+├── backend-py/
+│    ├── ollamaapi.py # Backend FastAPI (LLM, Chat, RAG)
+│    ├── static/ # Frontend (index.html, script.js, style.css)
+├── backend-php/
+│    ├── config.php # Konfigurasi DB
+│    ├── login.php
+│    ├── register.php # ... dan file user management lainnya
+├── requirements.txt
+└── README.md
+```
 
 Sistem ini menggunakan arsitektur dual-backend:
 1. PHP (Port 8001): Mengelola Autentikasi User dan Manajemen Sesi/Riwayat Percakapan (Database).
