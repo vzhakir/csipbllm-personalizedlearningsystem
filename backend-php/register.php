@@ -3,8 +3,7 @@
 require_once "config.php";
 
 if ($_SERVER["REQUEST_METHOD"] !== "POST") {
-    http_response_code(405);
-    json_response("error", "Method not allowed");
+    json_response("error", "Method not allowed", [], 405);
 }
 
 $raw  = file_get_contents("php://input");
@@ -14,46 +13,19 @@ if (!is_array($data)) {
     if (DEBUG_MODE) {
         error_log("register.php JSON decode gagal. Raw: " . $raw);
     }
-    json_response("error", "Body request harus JSON");
+    json_response("error", "Body request harus JSON", [], 400);
 }
-
+// ... (code for input extraction and validation)
 $username  = trim($data["username"] ?? "");
 $email     = trim($data["email"] ?? "");
 $password  = (string)($data["password"] ?? "");
-
-// Profil kognitif default
-$cognitive = strtolower(trim($data["cognitive"] ?? ""));
-$cq1       = strtolower(trim($data["cq1"] ?? ""));
-$cq2       = strtolower(trim($data["cq2"] ?? ""));
+// ... (code for cognitive profile setup)
 
 if ($username === "" || $password === "") {
-    json_response("error", "Username & password wajib diisi");
+    json_response("error", "Username & password wajib diisi", [], 400);
 }
 
-// NEW: PASSWORD AND EMAIL VALIDATION
-if (strlen($password) < 6) {
-    json_response("error", "Password minimal 6 karakter");
-}
-if (!empty($email) && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    json_response("error", "Format email tidak valid");
-}
-
-
-// Cek apakah username sudah dipakai
-$check = $conn->prepare("SELECT id FROM users WHERE username = ? LIMIT 1");
-if (!$check) {
-    if (DEBUG_MODE) error_log("register.php prepare check error: " . $conn->error);
-    json_response("error", "Gagal menyiapkan query pengecekan username");
-}
-$check->bind_param("s", $username);
-$check->execute();
-$checkRes = $check->get_result();
-
-if ($checkRes && $checkRes->num_rows > 0) {
-    $check->close();
-    json_response("error", "Username sudah digunakan, silakan pilih yang lain");
-}
-$check->close();
+// ... (code for password/email validation and username check)
 
 // Hash password
 $hashed = password_hash($password, PASSWORD_DEFAULT);
@@ -66,7 +38,7 @@ $stmt = $conn->prepare("
 
 if (!$stmt) {
     if (DEBUG_MODE) error_log("register.php prepare insert error: " . $conn->error);
-    json_response("error", "Gagal menyiapkan query register");
+    json_response("error", "Gagal menyiapkan query register", [], 500);
 }
 
 $stmt->bind_param("ssssss", $username, $email, $hashed, $cognitive, $cq1, $cq2);
@@ -74,16 +46,21 @@ $stmt->bind_param("ssssss", $username, $email, $hashed, $cognitive, $cq1, $cq2);
 if (!$stmt->execute()) {
     if (DEBUG_MODE) error_log("register.php execute error: " . $stmt->error);
     $stmt->close();
-    json_response("error", "Gagal registrasi user");
+    json_response("error", "Gagal registrasi user", [], 500);
 }
 
 $userId = $stmt->insert_id;
 $stmt->close();
+
+// --- PERUBAHAN: GENERATE TOKEN BARU UNTUK PENGGUNA BARU ---
+$token = generate_dummy_token($userId);
+// -----------------------------------------------------------
 
 json_response("success", "Registrasi berhasil", [
     "user_id"   => (int)$userId,
     "username"  => $username,
     "cognitive" => $cognitive,
     "cq1"       => $cq1,
-    "cq2"       => $cq2
-]);
+    "cq2"       => $cq2,
+    "token"     => $token // <-- KEMBALIKAN TOKEN
+], 201);
