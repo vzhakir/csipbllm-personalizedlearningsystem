@@ -40,17 +40,17 @@ Sistem ini menggunakan arsitektur dual-backend:
 1. PHP (Port 8001): Mengelola Autentikasi User dan Manajemen Sesi/Riwayat Percakapan (Database).
 2. Python/FastAPI (Port 8000): Menjalankan Model LLM, RAG, dan Logika Adaptif Chatbot.
 
-------------------------------------------------------------
-1. PRASYARAT
-------------------------------------------------------------
+---
+
+## 1. PRASYARAT
 Pastikan Anda telah menginstal:
 - Ollama: Untuk menjalankan Local LLM (deepseek-r1:8b dan mxbai-embed-large).
 - XAMPP/MAMP/WAMP: Untuk menjalankan server PHP dan MySQL/MariaDB.
 - Python 3.10+ dengan pip.
 
-------------------------------------------------------------
-2. PENYIAPAN DATABASE (MENGGUNAKAN XAMPP)
-------------------------------------------------------------
+---
+
+## 2. PENGGUNAAN DATABASE (MENGGUNAKAN XAMPP)
 
 LANGKAH 2.1: Mulai MySQL
 1. Jika menggunakan XAMPP, buka XAMPP Control Panel dan mulai modul **MySQL**.
@@ -118,9 +118,9 @@ CREATE TABLE conversation_turns (
 );
 ```
 
-------------------------------------------------------------
-3. PENYIAPAN BACKEND PHP (OTENTIKASI & LOG)
-------------------------------------------------------------
+---
+
+## 3. PENYIAPAN BACKEND PHP (OTENTIKASI & LOG)
 
 LANGKAH 3.1: Konfigurasi DB dan Keamanan (File: backend-php/config.php)
 Ubah kredensial DB dan AUTH_SECRET Anda.
@@ -146,9 +146,9 @@ php -S 127.0.0.1:8001
 
 *Server PHP kini berjalan di http://127.0.0.1:8001.*
 
-------------------------------------------------------------
-4. PENYIAPAN BACKEND PYTHON (LLM, RAG, & FASTAPI)
-------------------------------------------------------------
+---
+
+## 4. PENYIAPAN BACKEND PYTHON (LLM, RAG, & FASTAPI)
 
 LANGKAH 4.1: Buat dan Aktifkan Virtual Environment (.venv)
 Arahkan terminal ke folder utama proyek Anda.
@@ -188,9 +188,9 @@ uvicorn ollamaapi:app --host 127.0.0.1 --port 8000 --reload
 ```
 *Server Python/FastAPI kini berjalan di http://127.0.0.1:8000.*
 
-------------------------------------------------------------
-5. PENGGUNAAN APLIKASI
-------------------------------------------------------------
+---
+
+## 5. PENGGUNAAN APLIKASI
 Pastikan semua komponen berjalan secara bersamaan:
 1. MySQL/MariaDB (via XAMPP/Standalone).
 2. PHP API Server (Port 8001).
