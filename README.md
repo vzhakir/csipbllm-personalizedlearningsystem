@@ -140,12 +140,12 @@ Ubah kredensial DB dan AUTH_SECRET Anda.
 define("AUTH_SECRET", getenv('AUTH_SECRET') ?: "secret_key_yang_sangat_panjang_dan_rumit_ganti_ini"); // <-- UBAH INI
 ```
 
-``db
+```php
 $DB_HOST = getenv('DB_HOST') ?: "localhost";
 $DB_USER = getenv('DB_USER') ?: "your_db_username"; // <-- UBAH INI
 $DB_PASS = getenv('DB_PASS') ?: "your_db_password"; // <-- UBAH INI
 $DB_NAME = getenv('DB_NAME') ?: "llmchatbot";
-``
+```
 
 ## LANGKAH 3.2: 
 Jalankan Server PHP
