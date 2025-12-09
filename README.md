@@ -50,14 +50,14 @@ Pastikan Anda telah menginstal:
 
 ---
 
-## 2. PENGGUNAAN DATABASE (MENGGUNAKAN XAMPP)
+# 2. PENGGUNAAN DATABASE (MENGGUNAKAN XAMPP)
 
-# LANGKAH 2.1: 
+## LANGKAH 2.1: 
 Mulai MySQL
 1. Jika menggunakan XAMPP, buka XAMPP Control Panel dan mulai modul **MySQL**.
 2. Jika menggunakan instalasi standalone, pastikan layanan MySQL/MariaDB sudah aktif.
 
-# LANGKAH 2.2: 
+## LANGKAH 2.2: 
 Buat Database dan Tabel Via MySQL Shell
 1. Buka terminal/Command Prompt dan arahkan ke direktori bin MySQL/XAMPP agar perintah 'mysql' dapat dieksekusi.
 2. Masuk ke MySQL shell (ganti 'root' dan kosongkan/ganti '-p' jika Anda menggunakan password).
@@ -70,7 +70,7 @@ mysql -u root
 # mysql -u your_db_user -p 
 # (Masukkan password ketika diminta)
 ```
-# LANGKAH 2.3. 
+## LANGKAH 2.3. 
 Setelah masuk ke prompt MySQL (prompt: mysql> ), jalankan perintah SQL berikut:
 ```sql
 CREATE TABLE users (
@@ -123,9 +123,9 @@ CREATE TABLE conversation_turns (
 
 ---
 
-## 3. PENYIAPAN BACKEND PHP (OTENTIKASI & LOG)
+# 3. PENYIAPAN BACKEND PHP (OTENTIKASI & LOG)
 
-# LANGKAH 3.1: 
+## LANGKAH 3.1: 
 Konfigurasi DB dan Keamanan (File: backend-php/config.php)
 Ubah kredensial DB dan AUTH_SECRET Anda.
 
@@ -141,7 +141,7 @@ $DB_PASS = getenv('DB_PASS') ?: "your_db_password"; // <-- UBAH INI
 $DB_NAME = getenv('DB_NAME') ?: "llmchatbot";
 ``
 
-# LANGKAH 3.2: 
+## LANGKAH 3.2: 
 Jalankan Server PHP
 Arahkan terminal ke folder backend-php.
 
@@ -153,9 +153,9 @@ php -S 127.0.0.1:8001
 
 ---
 
-## 4. PENYIAPAN BACKEND PYTHON (LLM, RAG, & FASTAPI)
+# 4. PENYIAPAN BACKEND PYTHON (LLM, RAG, & FASTAPI)
 
-# LANGKAH 4.1: 
+## LANGKAH 4.1: 
 Buat dan Aktifkan Virtual Environment (.venv)
 Arahkan terminal ke folder utama proyek Anda.
 
@@ -170,7 +170,7 @@ source .venv/bin/activate
 # .venv\Scripts\activate
 ```
 
-# LANGKAH 4.2: 
+## LANGKAH 4.2: 
 Instal Dependensi
 Setelah .venv aktif, instal semua pustaka dari requirements.txt.
 
@@ -178,7 +178,7 @@ Setelah .venv aktif, instal semua pustaka dari requirements.txt.
 pip install -r requirements.txt
 ```
 
-# LANGKAH 4.3: 
+## LANGKAH 4.3: 
 Unduh Model Ollama
 Pastikan Ollama sedang berjalan (`ollama serve`) di latar belakang.
 
@@ -187,7 +187,7 @@ ollama pull deepseek-r1:8b
 ollama pull mxbai-embed-large
 ```
 
-# LANGKAH 4.4: 
+## LANGKAH 4.4: 
 Jalankan Server FastAPI menggunakan Uvicorn
 Arahkan terminal ke folder `backend-py`. Jalankan aplikasi `ollamaapi:app` menggunakan `uvicorn` di port 8000. Fitur `reload=True` akan membantu saat pengembangan.
 
@@ -199,7 +199,7 @@ uvicorn ollamaapi:app --host 127.0.0.1 --port 8000 --reload
 
 ---
 
-## 5. PENGGUNAAN APLIKASI
+# 5. PENGGUNAAN APLIKASI
 Pastikan semua komponen berjalan secara bersamaan:
 1. MySQL/MariaDB (via XAMPP/Standalone).
 2. PHP API Server (Port 8001).
