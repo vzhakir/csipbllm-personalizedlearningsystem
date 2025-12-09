@@ -3,8 +3,7 @@
 require_once "config.php";
 
 if ($_SERVER["REQUEST_METHOD"] !== "POST") {
-    http_response_code(405);
-    json_response("error", "Method not allowed");
+    json_response("error", "Method not allowed", [], 405);
 }
 
 // Baca body JSON
@@ -15,14 +14,14 @@ if (!is_array($data)) {
     if (DEBUG_MODE) {
         error_log("login.php JSON decode gagal. Raw: " . $raw);
     }
-    json_response("error", "Body request harus JSON");
+    json_response("error", "Body request harus JSON", [], 400);
 }
 
 $username = trim($data["username"] ?? "");
 $password = (string)($data["password"] ?? "");
 
 if ($username === "" || $password === "") {
-    json_response("error", "Username & password wajib diisi");
+    json_response("error", "Username & password wajib diisi", [], 400);
 }
 
 $stmt = $conn->prepare("
@@ -34,7 +33,7 @@ $stmt = $conn->prepare("
 
 if (!$stmt) {
     if (DEBUG_MODE) error_log("login.php prepare error: " . $conn->error);
-    json_response("error", "Gagal menyiapkan query login");
+    json_response("error", "Gagal menyiapkan query login", [], 500);
 }
 
 $stmt->bind_param("s", $username);
@@ -45,7 +44,7 @@ if (!$result || $result->num_rows !== 1) {
     if (DEBUG_MODE && !$result) {
         error_log("login.php execute/get_result error: " . $conn->error);
     }
-    json_response("error", "Username / password salah");
+    json_response("error", "Username / password salah", [], 401); 
 }
 
 $row = $result->fetch_assoc();
@@ -55,16 +54,18 @@ $hashedPassword = $row["password"] ?? "";
 
 // Verifikasi password (pastikan di DB pakai password_hash())
 if (!password_verify($password, $hashedPassword)) {
-    json_response("error", "Username / password salah");
+    json_response("error", "Username / password salah", [], 401);
 }
 
-// Token dummy (tidak disimpan di DB, hanya contoh)
-$token = bin2hex(random_bytes(32));
+// --- PERUBAHAN KRITIS: GENERATE TOKEN BARU (Menggunakan fungsi expiry) ---
+$userId = (int)$row["id"];
+$token = generate_dummy_token($userId);
+// -------------------------------------------------------------------------
 
 json_response("success", "Login berhasil", [
-    "user_id"   => (int)$row["id"],
+    "user_id"   => $userId,
     "username"  => $row["username"],
-    "email"     => $row["email"] ?? "", // Ditambahkan
+    "email"     => $row["email"] ?? "", 
     "token"     => $token,
     "cognitive" => $row["cognitive"] ?? "par",
     "cq1"       => $row["cq1"] ?? "t",
