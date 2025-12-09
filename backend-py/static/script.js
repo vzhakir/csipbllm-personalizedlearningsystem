@@ -13,6 +13,38 @@ let wrongAttempts = 0;
 const currentUserId = localStorage.getItem("user_id") || "0";
 let currentSessionId = localStorage.getItem("lastSessionId") || "default";
 
+// --- FUNGSI KRITIS BARU UNTUK OTENTIKASI TOKEN ---
+const getAuthHeaders = () => {
+    const token = localStorage.getItem("authToken");
+    if (!token) {
+        console.error("Autentikasi token hilang. Redirect ke login.");
+        // handleAuthError akan dipanggil secara implisit oleh fetch jika token hilang
+        return { "Content-Type": "application/json" }; 
+    }
+    return { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}` // <-- Mengirim token
+    };
+};
+
+const handleAuthError = (res, message) => {
+    if (res.status === 401 || res.status === 403) {
+        // --- PERBAIKAN KRITIS UNTUK MENGHENTIKAN LOOP ---
+        localStorage.clear(); 
+        alert(message || "Sesi berakhir. Silakan login kembali.");
+        
+        // 1. Redirect
+        window.location.href = "/static/login.html";
+        
+        // 2. Hentikan eksekusi skrip lebih lanjut secara paksa
+        // (Ini mencegah kode lain berjalan dan login.html redirect balik ke index)
+        throw new Error("Authentication failed, redirecting."); 
+        // --------------------------------------------------
+    }
+    return false;
+};
+// --------------------------------------------------
+
 
 // =========================================================
 // HELPER UMUM & MARKDOWN + MERMAID
@@ -159,6 +191,14 @@ const sendQuestion = async (message) => {
         alert("Sesi belum dimulai. Mohon klik New Chat."); 
         return; 
     }
+    
+    // Pastikan user_id ada (meskipun otentikasi menggunakan token)
+    if (currentUserId === "0") {
+        alert("User ID tidak ditemukan. Mohon login ulang."); 
+        localStorage.clear();
+        window.location.href = "/static/login.html";
+        return; 
+    }
 
     const mode = $("#mode") ? $("#mode").value : "accurate";
     const prompt_style = $("#promptStyle") ? $("#promptStyle").value : "zero_shot";
@@ -179,7 +219,8 @@ const sendQuestion = async (message) => {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ 
                 question: message, cognitive, cq1, cq2, mode, prompt_style, 
-                session_id: currentSessionId // Kirim ID Sesi
+                session_id: currentSessionId,
+                user_id: Number(currentUserId) // Kirim ID Pengguna
             }),
         });
 
@@ -187,6 +228,9 @@ const sendQuestion = async (message) => {
         const data = await res.json();
         
         if (loading) loading.remove();
+
+        // LOKASI TEPAT: Refresh history setelah chat berhasil (untuk auto-title)
+        loadHistorySidebar(); 
 
         // Jawaban Utama
         const mainHeader = `Tutor (${data.cognitive_main} | Latensi: ${data.latency_main_s.toFixed(2)}s | Style: ${data.prompt_style_main.toUpperCase()})`;
@@ -343,9 +387,10 @@ const downloadHistoryTxt = async () => {
     if (currentSessionId === "default") return;
     try {
       const res = await fetch(PHP_API_BASE + "/get_chat_history.php", {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST", headers: getAuthHeaders(), // <-- MENGGUNAKAN AUTH HEADER
         body: JSON.stringify({ user_id: currentUserId, session_id: currentSessionId, format: "txt" }),
       });
+      if (handleAuthError(res, "Gagal mengunduh. Sesi berakhir.")) return; // <-- CEK ERROR OTORISASI
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const txt = data.data || "Belum ada riwayat percakapan.";
@@ -359,9 +404,10 @@ const downloadHistoryJson = async () => {
     if (currentSessionId === "default") return;
     try {
       const res = await fetch(PHP_API_BASE + "/get_chat_history.php", {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST", headers: getAuthHeaders(), // <-- MENGGUNAKAN AUTH HEADER
         body: JSON.stringify({ user_id: currentUserId, session_id: currentSessionId, format: "json" }),
       });
+      if (handleAuthError(res, "Gagal mengunduh. Sesi berakhir.")) return; // <-- CEK ERROR OTORISASI
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       // Data yang di-return adalah object { turns: [...] }
@@ -391,7 +437,7 @@ function createSelectHTML(id, optionsMap, currentValue) {
 
 // --- Register Logic (omitted for brevity) ---
 function setupRegisterPage() {
-  if (localStorage.getItem("username")) { window.location.href = "/"; return; }
+  if (localStorage.getItem("authToken")) { window.location.href = "/"; return; }
   const regUsername = $("#regUsername");
   const regPassword = $("#regPassword");
   const regCognitive = $("#regCognitive");
@@ -426,6 +472,7 @@ function setupRegisterPage() {
       const data = await res.json();
       if (data.status !== "success") { registerError.textContent = data.message || "Registrasi gagal."; return; }
 
+      if (data.token) localStorage.setItem("authToken", data.token);
       if (data.user_id) localStorage.setItem("user_id", data.user_id);
       if (data.username) localStorage.setItem("username", data.username);
       if (email) localStorage.setItem("email", email); 
@@ -446,7 +493,7 @@ function setupRegisterPage() {
 
 // --- Login Logic (omitted for brevity) ---
 function setupLoginPage() {
-    if (localStorage.getItem("username")) { window.location.href = "/"; return; }
+    if (localStorage.getItem("authToken")) { window.location.href = "/"; return; }
     const loginUsername = $("#loginUsername");
     const loginPassword = $("#loginPassword");
     const loginError = $("#loginError");
@@ -474,6 +521,7 @@ function setupLoginPage() {
             const data = await res.json();
             if (data.status !== "success") { loginError.textContent = data.message || "Login gagal."; return; }
 
+            if (data.token) localStorage.setItem("authToken", data.token);
             if (data.user_id) localStorage.setItem("user_id", data.user_id);
             if (data.username) localStorage.setItem("username", data.username);
             if (data.email) localStorage.setItem("email", data.email); 
@@ -504,7 +552,7 @@ async function applyProfileUpdate(cognitive, cq1, cq2) {
 
     try {
         const res = await fetch(PHP_API_BASE + "/update_profile.php", {
-            method: "POST", headers: { "Content-Type": "application/json" },
+            method: "POST", headers: getAuthHeaders(), // <-- MENGGUNAKAN AUTH HEADER
             body: JSON.stringify({ 
                 user_id: Number(userId), 
                 email: currentEmail, 
@@ -513,6 +561,8 @@ async function applyProfileUpdate(cognitive, cq1, cq2) {
                 cq2: cq2 
             }),
         });
+        if (handleAuthError(res, "Sesi berakhir. Gagal adaptasi profil.")) return; // <-- CEK ERROR OTORISASI
+
         const data = await res.json();
         
         if (data.status === "success") {
@@ -554,9 +604,11 @@ async function doUpdateProfile() {
     
     try {
         const res = await fetch(PHP_API_BASE + "/update_profile.php", {
-            method: "POST", headers: { "Content-Type": "application/json" },
+            method: "POST", headers: getAuthHeaders(), // <-- MENGGUNAKAN AUTH HEADER
             body: JSON.stringify({ user_id: Number(userId), email: newEmail, cognitive: newCognitive, cq1: newCq1, cq2: newCq2 }),
         });
+        if (handleAuthError(res, "Sesi berakhir. Gagal simpan profil.")) return; // <-- CEK ERROR OTORISASI
+
         const data = await res.json();
         
         if (data.status === "success") {
@@ -599,8 +651,11 @@ async function loadUserInfoForModal() {
 
     try {
       const res = await fetch(PHP_API_BASE + "/userinfo.php", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ user_id: Number(userId) }),
+        method: "POST", headers: getAuthHeaders(), // <-- MENGGUNAKAN AUTH HEADER
+        body: JSON.stringify({ user_id: Number(userId) }),
       });
+      if (handleAuthError(res, "Sesi berakhir. Gagal ambil info user.")) return; // <-- CEK ERROR OTORISASI
+      
       const data = await res.json();
 
       if (data.status === "success" && data.user) {
@@ -685,9 +740,11 @@ const renameChatSession = async (sessionId, currentTitle) => {
 
     try {
         const res = await fetch(PHP_API_BASE + "/rename_session.php", {
-            method: "POST", headers: { "Content-Type": "application/json" },
+            method: "POST", headers: getAuthHeaders(), // <-- MENGGUNAKAN AUTH HEADER
             body: JSON.stringify({ user_id: currentUserId, session_id: sessionId, new_title: newTitle.trim() }),
         });
+        if (handleAuthError(res, "Sesi berakhir. Gagal ganti nama sesi.")) return; // <-- CEK ERROR OTORISASI
+        
         const data = await res.json();
         
         if (data.status === "success") {
@@ -715,9 +772,11 @@ const deleteChatSession = async (sessionId) => {
 
     try {
         const res = await fetch(PHP_API_BASE + "/delete_session.php", {
-            method: "POST", headers: { "Content-Type": "application/json" },
+            method: "POST", headers: getAuthHeaders(), // <-- MENGGUNAKAN AUTH HEADER
             body: JSON.stringify({ user_id: currentUserId, session_id: sessionId }),
         });
+        if (handleAuthError(res, "Sesi berakhir. Gagal hapus sesi.")) return; // <-- CEK ERROR OTORISASI
+        
         const data = await res.json();
         
         if (data.status === "success") {
@@ -770,9 +829,11 @@ async function deleteAllChats() {
 
     try {
         const res = await fetch(PHP_API_BASE + "/delete_all_chats.php", {
-            method: "POST", headers: { "Content-Type": "application/json" },
+            method: "POST", headers: getAuthHeaders(), // <-- MENGGUNAKAN AUTH HEADER
             body: JSON.stringify({ user_id: currentUserId }),
         });
+        if (handleAuthError(res, "Sesi berakhir. Gagal hapus semua chat.")) return; // <-- CEK ERROR OTORISASI
+        
         const data = await res.json();
 
         if (data.status === "success") {
@@ -820,9 +881,11 @@ const loadSession = async (sessionId, title) => {
 
     try {
         const res = await fetch(PHP_API_BASE + "/get_chat_history.php", {
-            method: "POST", headers: { "Content-Type": "application/json" },
+            method: "POST", headers: getAuthHeaders(), // <-- MENGGUNAKAN AUTH HEADER
             body: JSON.stringify({ user_id: currentUserId, session_id: sessionId }),
         });
+        if (handleAuthError(res, "Sesi berakhir. Gagal memuat riwayat.")) return; // <-- CEK ERROR OTORISASI
+        
         const data = await res.json();
         
         if (chatBox) chatBox.innerHTML = '';
@@ -899,15 +962,18 @@ const loadSession = async (sessionId, title) => {
 // --- History Sidebar Logic (MODIFIKASI: Menambahkan tombol delete dan rename) ---
 const loadHistorySidebar = async () => {
     const historyList = $("#historyList");
-    if (!historyList || currentUserId === "0") return;
+    // Gunakan localStorage.getItem("authToken") untuk cek apakah user sudah login
+    if (!historyList || !localStorage.getItem("authToken")) return; 
     
     historyList.innerHTML = `<div class="loading-history">⏳ Memuat riwayat...</div>`;
     
     try {
         const res = await fetch(PHP_API_BASE + "/get_chat_history.php", {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ user_id: currentUserId, session_id: 0 }), // session_id=0 untuk ambil daftar sesi
+            method: "POST", headers: getAuthHeaders(), // <-- MENGGUNAKAN AUTH HEADER
+            body: JSON.stringify({ user_id: currentUserId, session_id: 0 }), // user_id tetap dikirim (diabaikan PHP)
         });
+        if (handleAuthError(res, "Sesi berakhir. Gagal memuat sidebar.")) return; // <-- CEK ERROR OTORISASI
+
         const data = await res.json();
 
         if (!res.ok || !data.sessions) throw new Error("Gagal fetch session list.");
@@ -979,8 +1045,11 @@ const startNewChat = async (doConfirm = true) => {
         return;
     }
     
-    if (currentUserId === "0") {
+    // Cek otentikasi menggunakan token
+    if (!localStorage.getItem("authToken")) {
         alert("Autentikasi diperlukan untuk memulai sesi.");
+        localStorage.clear();
+        window.location.href = "/static/login.html";
         return;
     }
 
@@ -989,10 +1058,10 @@ const startNewChat = async (doConfirm = true) => {
     try {
         // 1. Buat Sesi Baru di DB via PHP
         const res = await fetch(PHP_API_BASE + "/session_management.php", {
-            method: "POST", headers: { "Content-Type": "application/json" },
+            method: "POST", headers: getAuthHeaders(), // <-- MENGGUNAKAN AUTH HEADER
             body: JSON.stringify({
                 action: "start_session",
-                user_id: currentUserId,
+                user_id: currentUserId, // user_id tetap dikirim (diabaikan PHP)
                 title: "New Chat " + new Date().toLocaleTimeString(),
                 cognitive: localStorage.getItem("cognitive") || "par",
                 cq1: localStorage.getItem("cq1") || "t",
@@ -1092,7 +1161,12 @@ const handleInputKeydown = (e) => {
 // =========================================================
 
 function setupMainApp() {
-    if (!localStorage.getItem("username")) { window.location.href = "/static/login.html"; return; }
+    // --- PERUBAHAN KRITIS: Cek Token untuk akses aplikasi utama ---
+    if (!localStorage.getItem("authToken")) { 
+        window.location.href = "/static/login.html"; 
+        return; 
+    }
+    // -----------------------------------------------------------------
     
     loadMarked().then((m) => { markedLib = m; });
     loadMermaid().then((m) => { mermaidLib = m; }); // <-- LOAD MERMAID
