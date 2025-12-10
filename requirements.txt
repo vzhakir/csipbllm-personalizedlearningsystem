@@ -3,7 +3,7 @@ uvicorn
 requests
 pydantic
 numpy
-faiss-gpu
+faiss-gpu # Ganti dengan faiss-gpu jika Anda memiliki GPU NVIDIA
 langchain
 langchain-community
 langchain-ollama

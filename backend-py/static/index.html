@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CSIPBLLM Chatbot</title>
+  <link rel="stylesheet" href="/static/style.css" /> 
+</head>
+<body>
+  <div class="app-layout">
+    
+    <div id="sidebarHistory" class="sidebar">
+        <h3 class="sidebar-title">My Chats</h3>
+        <div class="sidebar-actions">
+            <button id="btnNewChat" class="new-chat-btn">
+                <span class="icon">+</span> New Chat
+            </button>
+        </div>
+        
+        <div id="historyList" class="history-list">
+            <div class="loading-history">Loading history...</div>
+        </div>
+        
+        <div class="sidebar-footer">
+            <button id="downloadTxt" class="download-btn">Download TXT</button>
+            <button id="downloadJson" class="download-btn">Download JSON</button>
+        </div>
+    </div>
+    
+    <div class="main-content-wrapper">
+        <div class="topbar">
+            <div class="topbar-main">
+                <span class="app-title">CSIPBLLM Chatbot</span>
+                <span id="topbarUsername"></span>
+                <button id="btnUserDashboard" class="logout-btn">Akun & Profil</button>
+                <button id="btnLogoutMain" class="logout-btn">Logout</button>
+            </div>
+        </div>
+
+        <div class="chat-container">
+            <div id="chatBox" class="chat-box scrollable-content">
+                <div class="placeholder">
+                    <h1>Halo, <span id="welcomeUsername">Pengguna!</span></h1>
+                    <p>Saya adalah tutor Personalized Learning Anda. Mulai dengan mengetik pertanyaan di bawah ini.</p>
+                    <div id="profileSummary" class="profile-summary"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="fixed-chat-footer">
+            <div id="footerMeta" class="footer-meta">
+                <span id="currentStageText" class="footer-stage-text">Mode: Chat (Pertanyaan Baru)</span>
+            </div>
+
+            <div id="configBar" class="config-bar">
+                <select id="mode" class="mode-select" title="Mode Jawaban">
+                    <option value="fast">Cepat</option>
+                    <option value="accurate" selected>Teliti</option>
+                </select>
+                <select id="promptStyle" class="mode-select" title="Gaya Prompting">
+                    <option value="zero_shot" selected>Zero-Shot</option>
+                    <option value="cot">CoT</option>
+                    <option value="few_shot">Few-Shot</option>
+                </select>
+            </div>
+
+            <div class="chat-input-wrapper">
+                <textarea 
+                    id="mainInput" 
+                    placeholder="Tulis pertanyaan atau jawabanmu... (Enter untuk kirim, Ctrl/Shift+Enter untuk newline)"
+                    rows="1"
+                ></textarea>
+                <button id="sendBtn" class="send-btn" title="Kirim (Enter)">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+  </div>
+
+  <div id="userDashboardOverlay" class="user-modal-overlay">
+    <div class="user-modal">
+        <div class="user-modal-header">
+            <h3>Akun Saya</h3>
+            <button id="btnCloseUserModal" class="user-modal-close">✕</button>
+        </div>
+
+        <div class="user-modal-body">
+            <div class="user-field">
+            <span class="label">Username:</span>
+            <span id="udUsername" class="value"></span>
+            </div>
+            
+            <div id="udEmailContainer" class="user-field"></div>
+            <div id="udCognitiveContainer" class="user-field"></div>
+            <div id="udCq1Container" class="user-field"></div>
+            <div id="udCq2Container" class="user-field"></div>
+            
+            <div class="user-field">
+            <span class="label">Dibuat:</span>
+            <span id="udCreatedAt" class="value"></span>
+            </div>
+            <p id="udDebug" class="user-debug"></p>
+        </div>
+
+        <div class="user-modal-footer">
+            <button id="btnDeleteAllChats" class="user-delete-btn" style="background: #993a3a;">
+                Hapus Semua Chat
+            </button> 
+            <button id="btnDeleteUser" class="user-delete-btn">Hapus Akun</button>
+        </div>
+    </div>
+  </div>
+
+  <script src="/static/script.js"></script>
+</body>
+</html>

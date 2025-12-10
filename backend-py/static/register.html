@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <title>Register — CSIPBLLM</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/static/auth.css" />
+</head>
+<body>
+  <div class="auth-shell">
+    <div class="auth-header">
+      <div class="auth-logo">PL</div>
+      <h1 class="auth-title">Buat Akun Baru</h1>
+      <p class="auth-subtitle">Daftar untuk mulai menggunakan Personalized Learning.</p>
+
+      <div class="auth-tabs">
+        <a href="/static/login.html">Login</a>
+        <a href="/static/register.html" class="active">Register</a>
+      </div>
+    </div>
+
+    <div class="auth-body">
+      <div class="auth-field">
+        <label for="regUsername">Username</label>
+        <input id="regUsername" type="text" autocomplete="username" />
+      </div>
+
+      <div class="auth-field">
+        <label for="regPassword">Password</label>
+        <input id="regPassword" type="password" autocomplete="new-password" />
+      </div>
+
+      <p class="auth-subtitle" style="margin-top:10px;margin-bottom:4px;">
+        (Opsional) Setel profil belajar awalmu:
+      </p>
+
+      <div class="auth-field">
+        <label for="regCognitive">Tipe Kognitif</label>
+        <select id="regCognitive">
+          <option value="">Belum tahu / nanti saja</option>
+          <option value="par">PAR — Practical-Analytical</option>
+          <option value="tar">TAR — Theoretical-Analytical</option>
+        </select>
+      </div>
+
+      <div class="auth-field">
+        <label for="regCq1">CQ1</label>
+        <select id="regCq1">
+          <option value="">Belum pilih</option>
+          <option value="t">T — Teoretis / Thinking</option>
+          <option value="a">A — Analitis / Abstract</option>
+          <option value="p">P — Praktis / Project</option>
+        </select>
+      </div>
+
+      <div class="auth-field">
+        <label for="regCq2">CQ2</label>
+        <select id="regCq2">
+          <option value="">Belum pilih</option>
+          <option value="t">T — Teoretis / Thinking</option>
+          <option value="a">A — Analitis / Abstract</option>
+          <option value="p">P — Praktis / Project</option>
+        </select>
+      </div>
+
+      <div id="registerError" class="auth-error"></div>
+
+      <button id="btnRegister" class="auth-btn-main" type="button">
+        Daftar
+      </button>
+
+      <div class="auth-footer">
+        Sudah punya akun?
+        <a href="/static/login.html">Login</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const PHP_API_BASE = "http://127.0.0.1:8001";
+
+    // Kalau sudah login jangan buka register
+    if (localStorage.getItem("authToken")) { // <-- PERUBAHAN
+      window.location.href = "/";
+    }
+
+    const regUsername   = document.getElementById("regUsername");
+    const regPassword   = document.getElementById("regPassword");
+    const regCognitive  = document.getElementById("regCognitive");
+    const regCq1        = document.getElementById("regCq1");
+    const regCq2        = document.getElementById("regCq2");
+    const registerError = document.getElementById("registerError");
+    const btnRegister   = document.getElementById("btnRegister");
+
+    function setBusy(b) {
+      btnRegister.disabled = b;
+      btnRegister.textContent = b ? "Memproses..." : "Daftar";
+    }
+
+    async function doRegister() {
+      registerError.textContent = "";
+      const username  = regUsername.value.trim();
+      const password  = regPassword.value.trim();
+      // Tambahkan email, ambil dari field jika ada, atau kosong
+      const email = document.getElementById("regEmail") ? document.getElementById("regEmail").value.trim() : ""; 
+      const cognitive = regCognitive.value.trim();  // bisa kosong
+      const cq1       = regCq1.value.trim();        // bisa kosong
+      const cq2       = regCq2.value.trim();        // bisa kosong
+
+      if (!username || !password) {
+        registerError.textContent = "Username dan password wajib diisi.";
+        return;
+      }
+
+      setBusy(true);
+      try {
+        const res = await fetch(PHP_API_BASE + "/register.php", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username,
+            email, // <-- Sertakan email (jika ada fieldnya)
+            password,
+            cognitive,
+            cq1,
+            cq2
+          }),
+        });
+
+        const data = await res.json();
+
+        if (data.status !== "success") {
+          registerError.textContent = data.message || "Registrasi gagal.";
+          console.log("DEBUG register:", data);
+          return;
+        }
+
+        // 🔴 PERUBAHAN KRITIS: SIMPAN HANYA TOKEN (dan data user)
+        if (data.token) localStorage.setItem("authToken", data.token); // <-- SIMPAN TOKEN
+        // Simpan data presentasi:
+        if (data.user_id)  localStorage.setItem("user_id", data.user_id);
+        if (data.username) localStorage.setItem("username", data.username);
+        if (data.cognitive) localStorage.setItem("cognitive", data.cognitive);
+        if (data.cq1)       localStorage.setItem("cq1", data.cq1);
+        if (data.cq2)       localStorage.setItem("cq2", data.cq2);
+
+        window.location.href = "/";
+
+      } catch (err) {
+        console.error("Register error:", err);
+        registerError.textContent = "Tidak bisa terhubung ke server registrasi.";
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    btnRegister.addEventListener("click", doRegister);
+    regPassword.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") doRegister();
+    });
+  </script>
+</body>
+</html>
