@@ -14,7 +14,7 @@ Features
 
 ---
 
-🛠 Tech Stack
+Tech Stack
 - Backend LLM: FastAPI, Uvicorn
 - Backend Auth: PHP, MySQL (melalui XAMPP)
 - LLM: Ollama (gpt-oss, mxbai-embed-large)
