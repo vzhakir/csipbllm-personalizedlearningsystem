@@ -1,11 +1,11 @@
-# 🎓 LLM — Personalized Learning System
+# LLM — Personalized Learning System
 
 Asisten belajar interaktif berbasis **FastAPI** + **Ollama LLM**.  
 Sistem ini menyesuaikan jawaban dengan **gaya belajar** (Visual, Auditori, Kinestetik), serta menyimpan **riwayat percakapan** yang bisa diunduh.
 
 ---
 
-✨ Features
+Features
 - Jawaban adaptif sesuai tipe kognitif
 - Mode perbandingan acak antar gaya belajar
 - Evaluasi jawaban (Benar/Salah dengan feedback)
@@ -22,9 +22,9 @@ Sistem ini menyesuaikan jawaban dengan **gaya belajar** (Visual, Auditori, Kines
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 ```markdown
-📁 csipbllm-personalizedlearningsystem
+csipbllm-personalizedlearningsystem
 ├── backend-py/
 │    ├── ollamaapi.py # Backend FastAPI (LLM, Chat, RAG)
 │    ├── static/ # Frontend (index.html, script.js, style.css)
